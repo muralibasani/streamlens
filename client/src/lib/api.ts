@@ -61,6 +61,18 @@ export const api = {
         404: z.object({ message: z.string() }),
       },
     },
+    health: {
+      method: "GET" as const,
+      path: "/api/clusters/:id/health",
+      responses: {
+        200: z.object({
+          clusterId: z.number(),
+          online: z.boolean(),
+          error: z.string().nullable(),
+        }),
+        404: z.object({ message: z.string() }),
+      },
+    },
     create: {
       method: "POST" as const,
       path: "/api/clusters",
@@ -68,6 +80,15 @@ export const api = {
       responses: {
         201: clusterSchema,
         400: validationErrorSchema,
+      },
+    },
+    update: {
+      method: "PUT" as const,
+      path: "/api/clusters/:id",
+      input: insertClusterSchema,
+      responses: {
+        200: clusterSchema,
+        404: z.object({ message: z.string() }),
       },
     },
     delete: {

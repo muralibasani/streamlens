@@ -17,6 +17,33 @@ logger = logging.getLogger(__name__)
 class KafkaService:
     """Fetches real cluster state from Kafka broker, Connect, and Schema Registry."""
 
+    def check_cluster_health(self, bootstrap_servers: str) -> dict[str, Any]:
+        """
+        Check if Kafka cluster is reachable.
+        Returns: {"online": bool, "error": str | None}
+        """
+        if not bootstrap_servers:
+            return {"online": False, "error": "No bootstrap servers configured"}
+        
+        bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
+        if not bootstrap_list:
+            return {"online": False, "error": "Invalid bootstrap servers"}
+        
+        try:
+            admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
+            # Try to get cluster metadata with short timeout
+            metadata = admin.list_topics(timeout=5)
+            if metadata and metadata.topics:
+                return {"online": True, "error": None}
+            return {"online": False, "error": "No topics found"}
+        except Exception as e:
+            error_msg = str(e)
+            if "timed out" in error_msg.lower():
+                error_msg = "Connection timeout - cluster unreachable"
+            elif "failed to resolve" in error_msg.lower():
+                error_msg = "Cannot resolve bootstrap servers"
+            return {"online": False, "error": error_msg}
+
     def fetch_system_state(self, cluster: dict[str, Any]) -> dict[str, Any]:
         """
         cluster: dict with bootstrapServers, schemaRegistryUrl?, connectUrl?, jmxHost?, jmxPort?

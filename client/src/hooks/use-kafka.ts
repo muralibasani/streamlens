@@ -39,6 +39,21 @@ export function useCluster(id: number) {
   });
 }
 
+export function useClusterHealth(id: number) {
+  return useQuery({
+    queryKey: [api.clusters.health.path, id],
+    queryFn: async () => {
+      const url = `${API_BASE}${buildUrl(api.clusters.health.path, { id })}`;
+      const res = await fetch(url);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to check cluster health");
+      return api.clusters.health.responses[200].parse(await res.json());
+    },
+    retry: 1,
+    refetchInterval: 30000, // Check every 30 seconds
+  });
+}
+
 export function useCreateCluster() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -58,6 +73,29 @@ export function useCreateCluster() {
       return api.clusters.create.responses[201].parse(await res.json());
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.clusters.list.path] }),
+  });
+}
+
+export function useUpdateCluster() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: InsertCluster }) => {
+      const url = `${API_BASE}${buildUrl(api.clusters.update.path, { id })}`;
+      const res = await fetch(url, {
+        method: api.clusters.update.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.status === 404) throw new Error("Cluster not found");
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to update cluster" }));
+        throw new Error(error.message || "Failed to update cluster");
+      }
+      return api.clusters.update.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.clusters.list.path] });
+    },
   });
 }
 

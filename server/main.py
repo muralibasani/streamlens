@@ -126,6 +126,22 @@ def clusters_get(id: int, db: Session = Depends(get_db)):
     return cluster
 
 
+@app.get("/api/clusters/{id}/health")
+def cluster_health(id: int, db: Session = Depends(get_db)):
+    from lib.kafka import kafka_service
+    
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    health = kafka_service.check_cluster_health(cluster.get("bootstrapServers", ""))
+    return {
+        "clusterId": id,
+        "online": health["online"],
+        "error": health["error"],
+    }
+
+
 @app.post("/api/clusters")
 def clusters_create(body: CreateClusterBody, db: Session = Depends(get_db)):
     try:
@@ -147,6 +163,23 @@ def clusters_create(body: CreateClusterBody, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=400, detail={"message": str(e), "field": None})
 
+
+@app.put("/api/clusters/{id}")
+def clusters_update(id: int, body: CreateClusterBody, db: Session = Depends(get_db)):
+    from storage import update_cluster as db_update_cluster
+    cluster = db_update_cluster(
+        db,
+        id,
+        name=body.name,
+        bootstrap_servers=body.bootstrapServers,
+        schema_registry_url=body.schemaRegistryUrl,
+        connect_url=body.connectUrl,
+        jmx_host=body.jmxHost,
+        jmx_port=body.jmxPort,
+    )
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    return cluster
 
 @app.delete("/api/clusters/{id}", status_code=204)
 def clusters_delete(id: int, db: Session = Depends(get_db)):

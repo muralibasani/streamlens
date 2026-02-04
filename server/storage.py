@@ -84,6 +84,52 @@ def create_cluster(db: Session, name: str, bootstrap_servers: str, schema_regist
     }
 
 
+def update_cluster(
+    db: Session,
+    id: int,
+    name: str,
+    bootstrap_servers: str,
+    schema_registry_url: str | None = None,
+    connect_url: str | None = None,
+    jmx_host: str | None = None,
+    jmx_port: int | None = None,
+):
+    row = db.execute(
+        text("""
+            UPDATE clusters 
+            SET name = :name,
+                bootstrap_servers = :bs,
+                schema_registry_url = :sr,
+                connect_url = :cu,
+                jmx_host = :jmx_host,
+                jmx_port = :jmx_port
+            WHERE id = :id
+            RETURNING id, name, bootstrap_servers, schema_registry_url, connect_url, created_at, jmx_host, jmx_port
+        """),
+        {
+            "id": id,
+            "name": name,
+            "bs": bootstrap_servers,
+            "sr": schema_registry_url,
+            "cu": connect_url,
+            "jmx_host": jmx_host,
+            "jmx_port": jmx_port,
+        },
+    ).fetchone()
+    if not row:
+        return None
+    db.commit()
+    return {
+        "id": row[0],
+        "name": row[1],
+        "bootstrapServers": row[2],
+        "schemaRegistryUrl": row[3],
+        "connectUrl": row[4],
+        "createdAt": row[5].isoformat() if hasattr(row[5], "isoformat") else row[5],
+        "jmxHost": row[6],
+        "jmxPort": row[7],
+    }
+
 def delete_cluster(db: Session, id: int):
     db.execute(text("DELETE FROM clusters WHERE id = :id"), {"id": id})
     db.commit()
