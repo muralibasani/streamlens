@@ -11,7 +11,7 @@ client = OpenAI(
 def query_topology(question: str, topology: dict) -> dict:
     prompt = f"""
 You are a Kafka topology reasoning assistant.
-You are given a graph with nodes and edges representing Kafka topics, apps, connectors, streams, and schemas.
+You are given a graph with nodes and edges representing Kafka topics, producers, consumers, streams applications, connectors, and schemas.
 
 Current Topology Graph JSON:
 {json.dumps(topology)}
@@ -20,13 +20,20 @@ User question:
 {question}
 
 Using the graph:
-1. Answer in plain English.
-2. Return a list of node IDs to highlight in the UI that are relevant to the answer.
+1. Analyze the nodes and edges to find relevant entities that answer the question.
+2. Provide a clear, concise answer in plain English.
+3. Return the exact node IDs (from the graph) of all relevant entities to highlight and zoom to in the UI.
+
+Important:
+- For questions about "producers writing to X topic", include producer node IDs and the topic node ID
+- For questions about "consumers of X topic", include consumer node IDs and the topic node ID
+- For questions about "topics produced by X", include the producer/app node ID and all relevant topic node IDs
+- Always include the full node ID as it appears in the graph (e.g., "topic:testtopic", "group:mygroup", "jmx:active-producer:testtopic")
 
 Output format (JSON only):
 {{
   "answer": "Plain English explanation...",
-  "highlightNodes": ["topic:orders.raw", "app:checkout-svc", "connector:snowflake-sink"]
+  "highlightNodes": ["topic:orders", "group:checkout-consumer", "jmx:active-producer:orders"]
 }}
 """
     try:
@@ -41,8 +48,18 @@ Output format (JSON only):
         content = response.choices[0].message.content or "{}"
         return json.loads(content)
     except Exception as e:
-        print("AI Query failed", e)
+        print(f"AI Query failed: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Check if it's an API key issue
+        api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY", "dummy")
+        if api_key == "dummy" or not api_key or api_key.startswith("sk-") is False:
+            error_msg = "AI assistant not configured. Please set AI_INTEGRATIONS_OPENAI_API_KEY environment variable. See docs/AI_SETUP.md for details."
+        else:
+            error_msg = f"I couldn't process your request: {str(e)}"
+        
         return {
-            "answer": "I couldn't process your request at the moment. Please try again later.",
+            "answer": error_msg,
             "highlightNodes": [],
         }

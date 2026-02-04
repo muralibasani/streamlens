@@ -132,7 +132,31 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
         },
       }))
     );
-  }, [setNodes]);
+
+    // Zoom to highlighted nodes
+    if (nodeIds.length > 0) {
+      const highlightedNodes = nodes.filter((n) => nodeIds.includes(n.id));
+      
+      if (highlightedNodes.length === 1) {
+        // Single node: zoom to it
+        const node = highlightedNodes[0];
+        reactFlowInstance.setCenter(
+          node.position.x + 110,
+          node.position.y + 50,
+          { zoom: 1.2, duration: 800 }
+        );
+      } else if (highlightedNodes.length > 1) {
+        // Multiple nodes: fit all of them in view
+        const nodeIds = highlightedNodes.map((n) => n.id);
+        reactFlowInstance.fitView({
+          nodes: nodeIds.map((id) => ({ id })),
+          padding: 0.3,
+          duration: 800,
+          maxZoom: 1.5,
+        });
+      }
+    }
+  }, [setNodes, nodes, reactFlowInstance]);
 
   // Zoom to a specific match by index
   const zoomToMatch = useCallback((index: number) => {

@@ -11,7 +11,6 @@ venv
 .pytest_cache
 .mypy_cache
 uv.lock
-
 # SQLite
 *.db
 *.db-journal

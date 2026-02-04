@@ -55,6 +55,17 @@ All entities are automatically discovered in real-time - no manual configuration
 
 Click the **ℹ️ Info** button in the topology view for more details.
 
+### AI Chat Assistant
+
+The topology includes an AI-powered chat assistant that can answer questions about your Kafka cluster and **automatically highlight & zoom to relevant nodes**.
+
+**Setup Required**: See [`docs/AI_SETUP.md`](docs/AI_SETUP.md) for configuration instructions.
+
+Example questions:
+- "Which producers write to testtopic?" → Highlights producers & zooms to them
+- "Show me all consumers for orders topic" → Highlights consumers & focuses view
+- "What topics does my-app produce to?" → Shows producing relationships with zoom
+
 ### Search & Navigation
 
 - **Search Box** — Find nodes by name, type, or ID (topics, producers, consumers, etc.)

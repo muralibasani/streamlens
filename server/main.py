@@ -2,12 +2,17 @@ import os
 import threading
 import time
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+# Load environment variables from .env.dev or .env file
+load_dotenv(".env.dev")  # Load .env.dev first (dev environment)
+load_dotenv()  # Then load .env if it exists (will not override existing vars)
 
 from db import get_db, init_db
 from storage import (
