@@ -118,6 +118,14 @@ def clusters_list(db: Session = Depends(get_db)):
     return get_clusters(db)
 
 
+@app.get("/api/clusters/{id}")
+def clusters_get(id: int, db: Session = Depends(get_db)):
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    return cluster
+
+
 @app.post("/api/clusters")
 def clusters_create(body: CreateClusterBody, db: Session = Depends(get_db)):
     try:

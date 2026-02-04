@@ -10,13 +10,13 @@ import ReactFlow, {
   useReactFlow,
 } from "reactflow";
 import dagre from "dagre";
-import { useTopology, useRefreshTopology } from "@/hooks/use-kafka";
+import { useTopology, useRefreshTopology, useCluster } from "@/hooks/use-kafka";
 import TopologyNode from "@/components/TopologyNode";
 import { StreamsEdge } from "@/components/StreamsEdge";
 import { AiChatPanel } from "@/components/AiChatPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
@@ -58,6 +58,7 @@ const edgeTypes = {
 // Inner component that uses ReactFlow hooks
 function TopologyContent({ clusterId }: { clusterId: number }) {
   const { data: snapshot, isLoading, refetch } = useTopology(clusterId);
+  const { data: cluster } = useCluster(clusterId);
   const refreshTopology = useRefreshTopology();
   const { toast } = useToast();
   const reactFlowInstance = useReactFlow();
@@ -281,21 +282,46 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
   return (
     <div className="h-screen w-screen flex flex-col bg-background">
       {/* Header Toolbar */}
-      <div className="h-16 border-b border-border bg-card flex items-center justify-between px-6 shrink-0 z-10">
+      <div className="h-20 border-b border-border bg-card flex items-center justify-between px-6 shrink-0 z-10">
         <div className="flex items-center gap-4">
           <Link href="/">
             <Button variant="ghost" size="icon" className="rounded-full">
               <ArrowLeft className="w-5 h-5" />
             </Button>
           </Link>
-          <img 
-            src="https://kafka.apache.org/logos/kafka_logo--simple.png" 
-            alt="Kafka Logo" 
-            className="w-8 h-8 object-contain"
-          />
-          <div>
-            <h1 className="font-black text-xl tracking-tight uppercase">Cluster Topology</h1>
-            <p className="text-[10px] text-muted-foreground font-mono opacity-70">ID: {clusterId}</p>
+          <div className="flex items-center gap-3 pr-4 border-r border-border">
+            <img 
+              src="https://kafka.apache.org/logos/kafka_logo--simple.png" 
+              alt="Kafka Logo" 
+              className="w-8 h-8 object-contain"
+            />
+            <span className="font-black text-2xl tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              StreamLens
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <h1 className="font-bold text-lg tracking-tight">{cluster?.name || "Loading..."}</h1>
+              {snapshot ? (
+                <div className="flex items-center gap-1 text-xs text-green-400 bg-green-950/30 px-2 py-0.5 rounded border border-green-900/50">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Connected</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-xs text-red-400 bg-red-950/30 px-2 py-0.5 rounded border border-red-900/50">
+                  <XCircle className="w-3 h-3" />
+                  <span>Disconnected</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono opacity-70">
+              <span className="flex items-center gap-1">
+                <Server className="w-3 h-3" />
+                {cluster?.bootstrapServers || "—"}
+              </span>
+              <span>•</span>
+              <span>ID: {clusterId}</span>
+            </div>
           </div>
         </div>
         
@@ -335,6 +361,15 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                     </div>
                     <p className="text-muted-foreground text-xs leading-relaxed">
                       Potential producers derived from Kafka ACLs (WRITE permissions). Shows who <i>can</i> produce, not who <i>is</i> producing.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="flex items-center gap-1 text-[10px] text-purple-400 bg-purple-950/30 px-1.5 py-0.5 rounded border border-purple-900/50 whitespace-nowrap mt-0.5">
+                      <User className="w-3 h-3" />
+                      <span>Config</span>
+                    </div>
+                    <p className="text-muted-foreground text-xs leading-relaxed">
+                      Kafka Streams apps configured in streams.yaml. Use this to explicitly link input → output topics.
                     </p>
                   </div>
                 </div>

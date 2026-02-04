@@ -2,6 +2,12 @@ import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Database, Activity, Box, ArrowRightLeft, FileJson, GitBranch, Sparkles, Shield, User, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // Custom node component for distinct visual styles per Kafka entity type
 const NodeIcon = ({ type }: { type: string }) => {
@@ -36,6 +42,13 @@ const SourceBadge = ({ source }: { source?: string }) => {
         <div className="flex items-center gap-1 text-[10px] text-green-400 bg-green-950/30 px-1.5 py-0.5 rounded border border-green-900/50">
           <Sparkles className="w-3 h-3" />
           <span>Live</span>
+        </div>
+      );
+    case 'config':
+      return (
+        <div className="flex items-center gap-1 text-[10px] text-purple-400 bg-purple-950/30 px-1.5 py-0.5 rounded border border-purple-900/50">
+          <User className="w-3 h-3" />
+          <span>Config</span>
         </div>
       );
     case 'jmx':
@@ -100,13 +113,36 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
             <NodeIcon type={data.type} />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-semibold text-sm truncate max-w-[140px]" title={data.label}>
-              {data.label}
-            </span>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="font-semibold text-sm truncate max-w-[140px] cursor-default">
+                    {data.label}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs break-words">
+                  <p className="font-mono text-xs">{data.label}</p>
+                  {data.details && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {data.type === 'topic' && `Partitions: ${data.details.partitions || 'N/A'}`}
+                    </p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {data.subLabel && (
-              <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-                {data.subLabel}
-              </span>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-xs text-muted-foreground truncate max-w-[140px] cursor-default">
+                      {data.subLabel}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs break-words">
+                    <p className="font-mono text-xs">{data.subLabel}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
         </div>
