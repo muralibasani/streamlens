@@ -86,7 +86,7 @@ Most entities are automatically discovered in real-time:
 - **Consumer Groups** — From Kafka AdminClient
 - **Producers** — From JMX metrics or ACLs
 - **Connectors** — From Kafka Connect API (optional)
-- **Schemas** — From Schema Registry (optional)
+- **Schemas** — From Schema Registry (optional, click schema nodes to view full definitions)
 
 ### Kafka Streams Configuration
 
@@ -106,13 +106,15 @@ See [`docs/STREAMS_CONFIG.md`](docs/STREAMS_CONFIG.md) for full documentation.
 
 - **🌟 Live** (Green badge) — Consumers auto-discovered from Kafka consumer groups in real-time
 - **⚡ JMX** (Yellow badge) — Active producers detected from JMX metrics (topics receiving messages NOW)
-- **🛡️ ACL** (Amber badge) — Potential producers derived from Kafka ACLs (WRITE permissions)
+- **📄 Schema Nodes** — Topics with registered schemas show small linked schema nodes. **Click the schema node** to view the full schema definition in a dialog.
+
+**To enable Schema Registry integration**: When adding/editing a cluster, provide the `schemaRegistryUrl` (e.g., `http://localhost:8081`). Schema nodes will appear automatically after refreshing the topology.
 
 Click the **ℹ️ Info** button in the topology view for more details.
 
-### AI Chat Assistant
+### StreamPilot AI Assistant
 
-The topology includes an AI-powered chat assistant that can answer questions about your Kafka cluster and **automatically highlight & zoom to relevant nodes**.
+The topology includes an AI-powered chat assistant (**StreamPilot**) that can answer questions about your Kafka cluster and **automatically highlight & zoom to relevant nodes**.
 
 **Setup Required**: See [`docs/AI_SETUP.md`](docs/AI_SETUP.md) for configuration instructions.
 

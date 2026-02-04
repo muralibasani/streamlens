@@ -10,7 +10,7 @@ client = OpenAI(
 
 def query_topology(question: str, topology: dict) -> dict:
     prompt = f"""
-You are a Kafka topology reasoning assistant.
+You are StreamPilot, a Kafka topology reasoning assistant.
 You are given a graph with nodes and edges representing Kafka topics, producers, consumers, streams applications, connectors, and schemas.
 
 Current Topology Graph JSON:
@@ -28,7 +28,8 @@ Important:
 - For questions about "producers writing to X topic", include producer node IDs and the topic node ID
 - For questions about "consumers of X topic", include consumer node IDs and the topic node ID
 - For questions about "topics produced by X", include the producer/app node ID and all relevant topic node IDs
-- Always include the full node ID as it appears in the graph (e.g., "topic:testtopic", "group:mygroup", "jmx:active-producer:testtopic")
+- For questions about schemas, include schema node IDs (format: "schema:subject-name") and their linked topic nodes
+- Always include the full node ID as it appears in the graph (e.g., "topic:testtopic", "group:mygroup", "jmx:active-producer:testtopic", "schema:orders-value")
 
 Output format (JSON only):
 {{

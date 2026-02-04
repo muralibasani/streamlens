@@ -54,7 +54,11 @@ def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | N
     # Topic nodes from cluster
     topic_names = {t["name"] for t in state["topics"]}
     for t in state["topics"]:
-        nodes.append({"id": f"topic:{t['name']}", "type": "topic", "data": {"label": t["name"], "details": t}})
+        topic_data = {
+            "label": t["name"],
+            "details": t
+        }
+        nodes.append({"id": f"topic:{t['name']}", "type": "topic", "data": topic_data})
 
     # Ensure topic nodes exist for topics referenced by streams, producers, and consumers
     # This handles cases where topics appear in registrations/JMX/ACLs but not in broker metadata
@@ -176,11 +180,29 @@ def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | N
             else:
                 edges.append({"id": f"{c['id']}->{topic}", "source": c["id"], "target": f"topic:{topic}", "type": "sources", "animated": True})
 
+    # Create schema nodes and link them to topics
     for s in state["schemas"]:
-        topic_name = s["subject"].replace("-value", "").replace("-key", "")
-        if any(n["id"] == f"topic:{topic_name}" for n in nodes):
+        topic_name = s.get("topicName")
+        if topic_name and any(n["id"] == f"topic:{topic_name}" for n in nodes):
             schema_id = f"schema:{s['subject']}"
-            nodes.append({"id": schema_id, "type": "schema", "data": {"label": f"{s['subject']} (v{s['version']})"}})
-            edges.append({"id": f"{topic_name}->{schema_id}", "source": f"topic:{topic_name}", "target": schema_id, "type": "has_schema", "style": {"strokeDasharray": "5,5"}})
+            nodes.append({
+                "id": schema_id,
+                "type": "schema",
+                "data": {
+                    "label": s["subject"],
+                    "subLabel": f"v{s['version']}",
+                    "schemaType": s.get("type", "AVRO"),
+                    "subject": s["subject"],
+                    "version": s["version"]
+                }
+            })
+            # Link schema to topic with a dashed edge
+            edges.append({
+                "id": f"{topic_name}->{schema_id}",
+                "source": f"topic:{topic_name}",
+                "target": schema_id,
+                "type": "schema_link",
+                "style": {"strokeDasharray": "3,3", "stroke": "#60a5fa"}
+            })
 
     return {"nodes": nodes, "edges": edges}

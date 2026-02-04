@@ -519,14 +519,40 @@ class KafkaService:
                     r2 = client.get(f"{schema_url}/subjects/{subject}/versions/latest")
                     r2.raise_for_status()
                     ver = r2.json()
+                    
+                    # Extract topic name from subject (e.g., "testtopic-value" -> "testtopic")
+                    topic_name = subject.replace("-value", "").replace("-key", "")
+                    
                     schemas.append({
                         "subject": subject,
                         "version": ver.get("version", 0),
                         "type": ver.get("schemaType", "AVRO"),
+                        "topicName": topic_name,  # Link to topic
                     })
                 except Exception as e:
                     logger.debug("subject %s: %s", subject, e)
         return schemas
+    
+    def fetch_schema_details(self, schema_url: str, subject: str) -> dict[str, Any]:
+        """
+        Fetch full schema details for a specific subject (lazy loading).
+        Called on-demand when user hovers over a topic node.
+        """
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                r = client.get(f"{schema_url}/subjects/{subject}/versions/latest")
+                r.raise_for_status()
+                data = r.json()
+                return {
+                    "subject": subject,
+                    "version": data.get("version", 0),
+                    "id": data.get("id"),
+                    "schema": data.get("schema"),  # Full schema content
+                    "schemaType": data.get("schemaType", "AVRO"),
+                }
+        except Exception as e:
+            logger.error(f"Failed to fetch schema for {subject}: {e}")
+            raise RuntimeError(f"Schema not found: {subject}") from e
 
     def _load_streams_config(self) -> list[dict[str, Any]]:
         """

@@ -186,6 +186,28 @@ def topology_refresh(id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@app.get("/api/clusters/{id}/schema/{subject}")
+def get_schema_details(id: int, subject: str, db: Session = Depends(get_db)):
+    """
+    Lazy-load schema details for a specific subject.
+    Called on-demand when user hovers over a topic node.
+    """
+    from lib.kafka import kafka_service
+    
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    schema_url = cluster.get("schemaRegistryUrl")
+    if not schema_url:
+        raise HTTPException(status_code=400, detail="Schema Registry not configured for this cluster")
+    
+    try:
+        return kafka_service.fetch_schema_details(schema_url.rstrip("/"), subject)
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @app.get("/api/clusters/{id}/registrations")
 def registrations_list(id: int, db: Session = Depends(get_db)):
     if not get_cluster(db, id):

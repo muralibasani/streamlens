@@ -1,0 +1,52 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F4511E;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="streamGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FFE082;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFA726;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <circle cx="32" cy="32" r="30" fill="url(#bgGradient)"/>
+  
+  <!-- Stream flow icon - representing data flowing through nodes -->
+  <!-- Left node -->
+  <circle cx="18" cy="32" r="5" fill="#FFF" opacity="0.9"/>
+  
+  <!-- Middle node -->
+  <circle cx="32" cy="22" r="5" fill="#FFF" opacity="0.9"/>
+  <circle cx="32" cy="42" r="5" fill="#FFF" opacity="0.9"/>
+  
+  <!-- Right node -->
+  <circle cx="46" cy="32" r="5" fill="#FFF" opacity="0.9"/>
+  
+  <!-- Flow lines (animated-looking) -->
+  <path d="M 23 32 L 27 32" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <path d="M 22 29 L 28 23" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <path d="M 22 35 L 28 41" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  
+  <path d="M 37 22 L 41 26" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <path d="M 37 42 L 41 38" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <path d="M 37 32 L 41 32" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  
+  <!-- Flow dots (suggesting movement) -->
+  <circle cx="25" cy="32" r="1.5" fill="#FFE082">
+    <animate attributeName="cx" from="25" to="40" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" from="1" to="0" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="25" cy="26" r="1.5" fill="#FFE082">
+    <animate attributeName="cx" from="25" to="38" dur="2.2s" repeatCount="indefinite"/>
+    <animate attributeName="cy" from="26" to="28" dur="2.2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" from="1" to="0" dur="2.2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="25" cy="38" r="1.5" fill="#FFE082">
+    <animate attributeName="cx" from="25" to="38" dur="1.8s" repeatCount="indefinite"/>
+    <animate attributeName="cy" from="38" to="36" dur="1.8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" from="1" to="0" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+</svg>

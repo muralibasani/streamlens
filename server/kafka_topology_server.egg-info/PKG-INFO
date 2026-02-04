@@ -12,6 +12,7 @@ Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: confluent-kafka>=2.3.0
 Requires-Dist: httpx>=0.27.0
 Requires-Dist: jmxquery>=0.6.0
+Requires-Dist: pyyaml>=6.0.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0.0; extra == "dev"
 Requires-Dist: httpx>=0.27.0; extra == "dev"

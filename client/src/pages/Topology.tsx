@@ -16,7 +16,7 @@ import { StreamsEdge } from "@/components/StreamsEdge";
 import { AiChatPanel } from "@/components/AiChatPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User } from "lucide-react";
+import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
@@ -68,6 +68,17 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [matchingNodes, setMatchingNodes] = useState<string[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+
+  // Calculate entity counts
+  const entityCounts = useMemo(() => {
+    const topics = nodes.filter(n => n.data?.type === 'topic').length;
+    const schemas = nodes.filter(n => n.data?.type === 'schema').length;
+    const producers = nodes.filter(n => n.data?.type === 'producer' || n.id?.startsWith('jmx:')).length;
+    const consumers = nodes.filter(n => n.data?.type === 'consumer' || n.id?.startsWith('group:')).length;
+    const streams = nodes.filter(n => n.data?.type === 'streams').length;
+    
+    return { topics, schemas, producers, consumers, streams };
+  }, [nodes]);
 
   // Transform snapshot data into ReactFlow elements
   useEffect(() => {
@@ -314,11 +325,20 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono opacity-70">
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono opacity-70 flex-wrap">
               <span className="flex items-center gap-1">
                 <Server className="w-3 h-3" />
                 {cluster?.bootstrapServers || "—"}
               </span>
+              {cluster?.schemaRegistryUrl && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 text-blue-400">
+                    <span>Schema:</span>
+                    <span>{cluster.schemaRegistryUrl}</span>
+                  </span>
+                </>
+              )}
               <span>•</span>
               <span>ID: {clusterId}</span>
             </div>
@@ -458,6 +478,52 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
             <Background color="#333" gap={20} size={1} />
             <Controls className="!bg-card !border-border !fill-foreground" />
           </ReactFlow>
+
+          {/* Stats Panel - Floating in top-right corner */}
+          <div className="absolute top-4 right-4 z-10 bg-card/95 backdrop-blur-sm border border-border rounded-lg shadow-xl p-4 min-w-[220px]">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              Cluster Overview
+            </h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[hsl(var(--node-topic))]" />
+                  <span className="text-muted-foreground">Topics</span>
+                </div>
+                <span className="font-bold text-foreground">{entityCounts.topics}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <FileJson className="w-3 h-3 text-[hsl(var(--node-schema))]" />
+                  <span className="text-muted-foreground">Schemas</span>
+                </div>
+                <span className="font-bold text-foreground">{entityCounts.schemas}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Box className="w-3 h-3 text-[hsl(var(--node-producer))]" />
+                  <span className="text-muted-foreground">Producers</span>
+                </div>
+                <span className="font-bold text-foreground">{entityCounts.producers}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-3 h-3 text-[hsl(var(--node-consumer))]" />
+                  <span className="text-muted-foreground">Consumer Groups</span>
+                </div>
+                <span className="font-bold text-foreground">{entityCounts.consumers}</span>
+              </div>
+              {entityCounts.streams > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="w-3 h-3 text-[hsl(var(--node-streams))]" />
+                    <span className="text-muted-foreground">Streams Apps</span>
+                  </div>
+                  <span className="font-bold text-foreground">{entityCounts.streams}</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Right Sidebar - AI Chat */}

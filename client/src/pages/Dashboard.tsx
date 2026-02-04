@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Server, Activity, Trash2, ArrowRight } from "lucide-react";
+import { MoreHorizontal, Server, Activity, Trash2, ArrowRight, Database } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 
@@ -106,8 +106,17 @@ export default function Dashboard() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  <CardDescription className="font-mono text-xs truncate" title={cluster.bootstrapServers}>
-                    {cluster.bootstrapServers}
+                  <CardDescription className="space-y-1">
+                    <div className="font-mono text-xs truncate flex items-center gap-2" title={cluster.bootstrapServers}>
+                      <Server className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{cluster.bootstrapServers}</span>
+                    </div>
+                    {cluster.schemaRegistryUrl && (
+                      <div className="font-mono text-xs truncate flex items-center gap-2 text-blue-400" title={cluster.schemaRegistryUrl}>
+                        <Database className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{cluster.schemaRegistryUrl}</span>
+                      </div>
+                    )}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
