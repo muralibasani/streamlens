@@ -3,6 +3,11 @@
 Quick script to configure JMX for your cluster.
 """
 import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import from server modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from db import SessionLocal
 from storage import get_clusters
 from sqlalchemy import text

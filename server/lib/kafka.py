@@ -35,9 +35,10 @@ class KafkaService:
             admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
             # Try to get cluster metadata with short timeout
             metadata = admin.list_topics(timeout=5)
-            if metadata and metadata.topics:
+            # Cluster is online if we can successfully get metadata, regardless of topic count
+            if metadata is not None:
                 return {"online": True, "error": None}
-            return {"online": False, "error": "No topics found"}
+            return {"online": False, "error": "Failed to retrieve cluster metadata"}
         except Exception as e:
             error_msg = str(e)
             if "timed out" in error_msg.lower():

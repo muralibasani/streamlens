@@ -4,9 +4,9 @@ set -e
 BOOTSTRAP="localhost:9092"
 SCHEMA_REGISTRY="http://localhost:8081"
 
-CREATE_TOPICS=false       # set to false to skip topic creation
-START_PRODUCERS=false     # set to false to skip starting producers
-START_CONSUMERS=false     # set to false to skip starting consumers
+CREATE_TOPICS=true       # set to false to skip topic creation
+START_PRODUCERS=true     # set to false to skip starting producers
+START_CONSUMERS=true     # set to false to skip starting consumers
 REGISTER_SCHEMAS=true     # set to false to skip registering schemas
 
 
@@ -47,7 +47,7 @@ if [ "$CREATE_TOPICS" = true ]; then
   echo "🚀 Creating topics..."
   for topic in "${TOPICS[@]}"; do
     echo "Creating topic: $topic"
-    ./bin/kafka-topics.sh \
+    kafka-topics.sh \
       --bootstrap-server $BOOTSTRAP \
       --create \
       --if-not-exists \
@@ -80,7 +80,7 @@ if [ "$START_PRODUCERS" = true ]; then
           echo "$MSG"
           sleep 0.2
         done
-      ) | ./bin/kafka-console-producer.sh \
+      ) | kafka-console-producer.sh \
            --bootstrap-server $BOOTSTRAP \
            --topic "$topic" > logs/${topic}-producer.log 2>&1 &
     fi
@@ -101,7 +101,7 @@ if [ "$START_CONSUMERS" = true ]; then
       GROUP_NAME="consumer-${topic}-group"
       echo "Starting consumer for topic: $topic with group: $GROUP_NAME"
 
-      ./bin/kafka-console-consumer.sh \
+      kafka-console-consumer.sh \
         --bootstrap-server $BOOTSTRAP \
         --topic "$topic" \
         --group "$GROUP_NAME" \
@@ -113,6 +113,27 @@ if [ "$START_CONSUMERS" = true ]; then
 else
   echo "⚠️ Skipping consumers."
 fi
+
+# -------------------------------
+# Step 4: Register producers with StreamLens API
+# -------------------------------
+STREAMLENS_API="http://localhost:5000/api"
+CLUSTER_ID=1  # Change this to match your cluster ID
+
+echo "🚀 Registering producers with StreamLens..."
+for i in "${!TOPICS[@]}"; do
+  if (( i % 2 == 0 )); then
+    topic="${TOPICS[i]}"
+    APP_NAME="producer-${topic}"
+    echo "Registering producer: $APP_NAME for topic: $topic"
+    
+    curl -s -X POST "$STREAMLENS_API/clusters/$CLUSTER_ID/registrations" \
+      -H "Content-Type: application/json" \
+      -d "{\"appName\": \"$APP_NAME\", \"role\": \"producer\", \"topics\": [\"$topic\"]}" \
+      > /dev/null 2>&1
+  fi
+done
+echo "✅ Producers registered with StreamLens."
 
 echo "🛠️ Done. Use 'jobs' to see running processes or 'kill %N' to stop individual producers/consumers."
 
