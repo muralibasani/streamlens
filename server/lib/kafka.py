@@ -3,9 +3,12 @@ Fetch real Kafka cluster state: topics, consumer groups, connectors (optional), 
 Uses confluent-kafka AdminClient, Kafka Connect REST API, and Schema Registry REST API.
 """
 import logging
+import os
+from pathlib import Path
 from typing import Any
 
 import httpx
+import yaml
 from confluent_kafka.admin import AdminClient
 
 logger = logging.getLogger(__name__)
@@ -58,6 +61,9 @@ class KafkaService:
             producers.extend(acl_producers)
             
             state["producers"] = producers
+            
+            # Load configured Kafka Streams applications (from streams.yaml)
+            state["streams"] = self._load_streams_config()
             
         except Exception as e:
             logger.exception("Kafka broker error: %s", e)
@@ -513,14 +519,89 @@ class KafkaService:
                     r2 = client.get(f"{schema_url}/subjects/{subject}/versions/latest")
                     r2.raise_for_status()
                     ver = r2.json()
+                    
+                    # Extract topic name from subject (e.g., "testtopic-value" -> "testtopic")
+                    topic_name = subject.replace("-value", "").replace("-key", "")
+                    
                     schemas.append({
                         "subject": subject,
                         "version": ver.get("version", 0),
                         "type": ver.get("schemaType", "AVRO"),
+                        "topicName": topic_name,  # Link to topic
                     })
                 except Exception as e:
                     logger.debug("subject %s: %s", subject, e)
         return schemas
+    
+    def fetch_schema_details(self, schema_url: str, subject: str) -> dict[str, Any]:
+        """
+        Fetch full schema details for a specific subject (lazy loading).
+        Called on-demand when user hovers over a topic node.
+        """
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                r = client.get(f"{schema_url}/subjects/{subject}/versions/latest")
+                r.raise_for_status()
+                data = r.json()
+                return {
+                    "subject": subject,
+                    "version": data.get("version", 0),
+                    "id": data.get("id"),
+                    "schema": data.get("schema"),  # Full schema content
+                    "schemaType": data.get("schemaType", "AVRO"),
+                }
+        except Exception as e:
+            logger.error(f"Failed to fetch schema for {subject}: {e}")
+            raise RuntimeError(f"Schema not found: {subject}") from e
+
+    def _load_streams_config(self) -> list[dict[str, Any]]:
+        """
+        Load Kafka Streams applications from streams.yaml config file.
+        Returns list of streams with: name, consumerGroup, inputTopics, outputTopics
+        """
+        streams = []
+        
+        # Look for streams.yaml in the server directory
+        config_path = Path(__file__).parent.parent / "streams.yaml"
+        
+        if not config_path.exists():
+            logger.debug("No streams.yaml found, skipping streams configuration")
+            return streams
+        
+        try:
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+            
+            if not config or "streams" not in config:
+                logger.warning("streams.yaml exists but has no 'streams' key")
+                return streams
+            
+            for stream_config in config.get("streams", []):
+                name = stream_config.get("name")
+                consumer_group = stream_config.get("consumerGroup")
+                input_topics = stream_config.get("inputTopics", [])
+                output_topics = stream_config.get("outputTopics", [])
+                
+                if not name or not consumer_group:
+                    logger.warning(f"Skipping invalid stream config: {stream_config}")
+                    continue
+                
+                streams.append({
+                    "id": f"streams:{name}",
+                    "label": name,  # Used as label on the edge
+                    "name": name,
+                    "consumerGroup": consumer_group,
+                    "consumesFrom": input_topics,
+                    "producesTo": output_topics,
+                    "source": "config",
+                })
+                
+                logger.info(f"Loaded streams app '{name}': {input_topics} → {output_topics}")
+            
+        except Exception as e:
+            logger.error(f"Failed to load streams.yaml: {e}")
+        
+        return streams
 
 
 kafka_service = KafkaService()

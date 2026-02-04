@@ -24,7 +24,7 @@ export function AiChatPanel({ topology, onHighlightNodes }: AiChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     { 
       role: "assistant", 
-      content: "Hello! I'm your topology assistant. Ask me questions like 'What producers write to the orders topic?' or 'Show me potential bottlenecks'.",
+      content: "👋 Hi! I'm StreamPilot, your AI assistant for navigating Kafka topologies. I can answer questions and automatically highlight & zoom to relevant nodes.\n\nTry asking:\n• 'Which producers write to testtopic?'\n• 'Show me all consumers of orders topic'\n• 'What topics does my-app produce to?'\n• 'Which topics have registered schemas?'",
       timestamp: Date.now() 
     }
   ]);
@@ -73,12 +73,12 @@ export function AiChatPanel({ topology, onHighlightNodes }: AiChatPanelProps) {
       <CardHeader className="border-b border-border py-4 px-4 bg-muted/20">
         <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-primary">
           <Sparkles className="w-4 h-4" />
-          AI Insight
+          StreamPilot
         </CardTitle>
       </CardHeader>
       
-      <ScrollArea className="flex-1 p-4">
-        <div className="flex flex-col gap-4">
+      <ScrollArea className="flex-1 p-4 overflow-y-auto">
+        <div className="flex flex-col gap-4 w-full">
           <AnimatePresence initial={false}>
             {messages.map((msg, idx) => (
               <motion.div
@@ -86,7 +86,7 @@ export function AiChatPanel({ topology, onHighlightNodes }: AiChatPanelProps) {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
-                  "flex gap-3 max-w-[90%]",
+                  "flex gap-3 max-w-[90%] min-w-0",
                   msg.role === "user" ? "ml-auto flex-row-reverse" : ""
                 )}
               >
@@ -99,7 +99,7 @@ export function AiChatPanel({ topology, onHighlightNodes }: AiChatPanelProps) {
                   {msg.role === "assistant" ? <Bot className="w-4 h-4" /> : <div className="w-2 h-2 rounded-full bg-current" />}
                 </div>
                 <div className={cn(
-                  "p-3 rounded-2xl text-sm leading-relaxed shadow-sm",
+                  "p-3 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap break-words min-w-0 flex-1",
                   msg.role === "assistant" 
                     ? "bg-card border border-border/50 text-foreground rounded-tl-none" 
                     : "bg-primary text-primary-foreground rounded-tr-none"

@@ -53,6 +53,14 @@ export const api = {
         200: z.array(clusterSchema),
       },
     },
+    get: {
+      method: "GET" as const,
+      path: "/api/clusters/:id",
+      responses: {
+        200: clusterSchema,
+        404: z.object({ message: z.string() }),
+      },
+    },
     create: {
       method: "POST" as const,
       path: "/api/clusters",

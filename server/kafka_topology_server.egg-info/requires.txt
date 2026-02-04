@@ -6,6 +6,7 @@ python-dotenv>=1.0.0
 confluent-kafka>=2.3.0
 httpx>=0.27.0
 jmxquery>=0.6.0
+pyyaml>=6.0.0
 
 [dev]
 pytest>=8.0.0

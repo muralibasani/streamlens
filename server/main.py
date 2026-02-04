@@ -2,12 +2,17 @@ import os
 import threading
 import time
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+# Load environment variables from .env.dev or .env file
+load_dotenv(".env.dev")  # Load .env.dev first (dev environment)
+load_dotenv()  # Then load .env if it exists (will not override existing vars)
 
 from db import get_db, init_db
 from storage import (
@@ -113,6 +118,14 @@ def clusters_list(db: Session = Depends(get_db)):
     return get_clusters(db)
 
 
+@app.get("/api/clusters/{id}")
+def clusters_get(id: int, db: Session = Depends(get_db)):
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    return cluster
+
+
 @app.post("/api/clusters")
 def clusters_create(body: CreateClusterBody, db: Session = Depends(get_db)):
     try:
@@ -171,6 +184,28 @@ def topology_refresh(id: int, db: Session = Depends(get_db)):
         return create_snapshot(db, id, graph)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/clusters/{id}/schema/{subject}")
+def get_schema_details(id: int, subject: str, db: Session = Depends(get_db)):
+    """
+    Lazy-load schema details for a specific subject.
+    Called on-demand when user hovers over a topic node.
+    """
+    from lib.kafka import kafka_service
+    
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    schema_url = cluster.get("schemaRegistryUrl")
+    if not schema_url:
+        raise HTTPException(status_code=400, detail="Schema Registry not configured for this cluster")
+    
+    try:
+        return kafka_service.fetch_schema_details(schema_url.rstrip("/"), subject)
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get("/api/clusters/{id}/registrations")

@@ -43,7 +43,7 @@
   --node-consumer: 145 70% 50%; /* Green */
   --node-streams: 185 70% 45%;   /* Teal */
   --node-connector: 270 70% 60%;/* Purple */
-  --node-schema: 0 0% 50%;      /* Grey */
+  --node-schema: 215 85% 65%;   /* Blue (Schema Registry) */
 }
 
 /* Animated dashed line for Kafka Streams edges */

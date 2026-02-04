@@ -12,3 +12,6 @@ lib/__init__.py
 lib/ai.py
 lib/kafka.py
 lib/topology.py
+tests/test_consumer_query.py
+tests/test_jmx.py
+tests/test_list_groups.py

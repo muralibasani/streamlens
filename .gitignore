@@ -11,8 +11,15 @@ venv
 .pytest_cache
 .mypy_cache
 uv.lock
-
+server/tests/__pycache__/
+server/debug/__pycache__/
 # SQLite
 *.db
 *.db-journal
 .local/*
+# Environment files
+.env
+.env.dev
+
+# Streams configuration (user-specific, environment-dependent)
+server/streams.yaml
