@@ -241,6 +241,28 @@ def get_schema_details(id: int, subject: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@app.get("/api/clusters/{id}/consumer/{group_id}/lag")
+def get_consumer_lag(id: int, group_id: str, db: Session = Depends(get_db)):
+    """
+    Fetch consumer lag per partition for a specific consumer group.
+    Called on-demand when user clicks on a consumer node.
+    """
+    from lib.kafka import kafka_service
+    
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    bootstrap_servers = cluster.get("bootstrapServers")
+    if not bootstrap_servers:
+        raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
+    
+    try:
+        return kafka_service.fetch_consumer_lag(bootstrap_servers, group_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @app.get("/api/clusters/{id}/registrations")
 def registrations_list(id: int, db: Session = Depends(get_db)):
     if not get_cluster(db, id):

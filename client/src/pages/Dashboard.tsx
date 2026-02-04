@@ -28,11 +28,11 @@ function ClusterCard({ cluster, onEdit, onDelete }: { cluster: any; onEdit: (clu
         <CardHeader className="pb-4">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10 text-primary">
+              <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500/10 to-blue-500/10">
                 <img 
-                  src="https://kafka.apache.org/logos/kafka_logo--simple.png" 
-                  alt="Kafka" 
-                  className="w-6 h-6 object-contain brightness-0 invert dark:invert-0"
+                  src="/streamlens-logo.svg" 
+                  alt="StreamLens" 
+                  className="w-6 h-6 object-contain"
                 />
               </div>
               <CardTitle className="text-2xl font-bold tracking-tight">{cluster.name}</CardTitle>
@@ -140,18 +140,22 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-6">
-            <img 
-              src="https://kafka.apache.org/logos/kafka_logo--simple.png" 
-              alt="Kafka Logo" 
-              className="w-16 h-16 object-contain"
-            />
+            <div className="relative">
+              <img 
+                src="/streamlens-logo.svg" 
+                alt="StreamLens Logo" 
+                className="w-16 h-16 object-contain"
+              />
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-blue-500/20 rounded-2xl blur-xl -z-10"></div>
+            </div>
             <div className="space-y-2">
               <h1 className="text-5xl font-black tracking-tighter bg-gradient-to-br from-foreground to-foreground/40 bg-clip-text text-transparent">
                 StreamLens
               </h1>
               <p className="text-muted-foreground text-lg font-medium">
-                Visualize, analyze, and optimize your event streaming platforms.
+                Visualize, analyze, and optimize your Apache Kafka event streaming platforms.
               </p>
+              
             </div>
           </div>
           <CreateClusterDialog />
@@ -168,9 +172,18 @@ export default function Dashboard() {
             <CreateClusterDialog />
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {clusters?.map((cluster) => (
-              <ClusterCard 
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <h2 className="text-3xl font-bold tracking-tight">Your Kafka Clusters</h2>
+              <img 
+                src="https://kafka.apache.org/logos/kafka_logo--simple.png" 
+                alt="Kafka" 
+                className="h-6 object-contain opacity-40 brightness-0 dark:brightness-100 dark:invert"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {clusters?.map((cluster) => (
+                <ClusterCard 
                 key={cluster.id} 
                 cluster={cluster} 
                 onEdit={setEditingCluster} 
@@ -180,7 +193,8 @@ export default function Dashboard() {
                   }
                 }} 
               />
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>

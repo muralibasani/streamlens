@@ -117,6 +117,10 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
   const [showSchemaDialog, setShowSchemaDialog] = useState(false);
   const [schemaDetails, setSchemaDetails] = useState<any>(null);
   const [isLoadingSchema, setIsLoadingSchema] = useState(false);
+  
+  const [showConsumerLagDialog, setShowConsumerLagDialog] = useState(false);
+  const [consumerLag, setConsumerLag] = useState<any>(null);
+  const [isLoadingLag, setIsLoadingLag] = useState(false);
 
   const handleSchemaClick = async () => {
     if (data.type !== 'schema') return;
@@ -137,6 +141,27 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
     }
   };
 
+  const handleConsumerClick = async () => {
+    if (data.type !== 'consumer') return;
+    
+    setShowConsumerLagDialog(true);
+    setIsLoadingLag(true);
+    
+    try {
+      // Extract group ID from node ID (format: "group:groupname")
+      const groupId = data.label || data.details?.id || '';
+      const res = await fetch(`/api/clusters/${clusterId}/consumer/${encodeURIComponent(groupId)}/lag`);
+      if (res.ok) {
+        const lagData = await res.json();
+        setConsumerLag(lagData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch consumer lag:', error);
+    } finally {
+      setIsLoadingLag(false);
+    }
+  };
+
   return (
     <>
       <div 
@@ -146,9 +171,10 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
           isHighlighted ? "border-primary shadow-[0_0_20px_hsl(var(--primary)/0.3)] scale-105" : "",
           isSearchMatch ? "ring-2 ring-yellow-500/50" : "",
           "hover:border-primary/50",
-          data.type === 'schema' && "cursor-pointer hover:border-blue-500 hover:shadow-blue-500/20"
+          data.type === 'schema' && "cursor-pointer hover:border-blue-500 hover:shadow-blue-500/20",
+          data.type === 'consumer' && "cursor-pointer hover:border-green-500 hover:shadow-green-500/20"
         )}
-        onClick={data.type === 'schema' ? handleSchemaClick : undefined}
+        onClick={data.type === 'schema' ? handleSchemaClick : data.type === 'consumer' ? handleConsumerClick : undefined}
       >
         <Handle type="target" position={Position.Left} className="!bg-muted-foreground !w-2 !h-2" />
       
@@ -212,7 +238,7 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
     </div>
 
     {/* Schema Details Dialog */}
-      <Dialog open={showSchemaDialog} onOpenChange={setShowSchemaDialog}>
+    <Dialog open={showSchemaDialog} onOpenChange={setShowSchemaDialog}>
         <DialogContent className="max-w-3xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -278,6 +304,87 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
                 </div>
               </div>
             )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+
+    {/* Consumer Lag Dialog */}
+    <Dialog open={showConsumerLagDialog} onOpenChange={setShowConsumerLagDialog}>
+      <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-green-500" />
+            Consumer Lag: {data.label}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <ScrollArea className="h-[60vh] pr-4">
+          {isLoadingLag && (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          )}
+          
+          {!isLoadingLag && consumerLag && (
+            <div className="space-y-6">
+              {Object.entries(consumerLag.topics || {}).map(([topicName, topicData]: [string, any]) => {
+                const totalLag = topicData.partitions?.reduce((sum: number, p: any) => sum + (p.lag || 0), 0) || 0;
+                
+                return (
+                  <div key={topicName} className="border border-border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-lg flex items-center gap-2">
+                        <span className="text-primary">{topicName}</span>
+                      </h3>
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">Total Lag: </span>
+                        <span className={cn(
+                          "font-bold",
+                          totalLag === 0 ? "text-green-400" : totalLag < 1000 ? "text-yellow-400" : "text-red-400"
+                        )}>
+                          {totalLag.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {topicData.partitions?.sort((a: any, b: any) => a.partition - b.partition).map((partition: any) => (
+                        <div key={partition.partition} className="bg-muted/30 rounded p-3 grid grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <div className="text-muted-foreground text-xs">Partition</div>
+                            <div className="font-bold">{partition.partition}</div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground text-xs">Current Offset</div>
+                            <div className="font-mono">{partition.currentOffset?.toLocaleString() || 'N/A'}</div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground text-xs">Log End Offset</div>
+                            <div className="font-mono">{partition.logEndOffset?.toLocaleString() || 'N/A'}</div>
+                          </div>
+                          <div>
+                            <div className="text-muted-foreground text-xs">Lag</div>
+                            <div className={cn(
+                              "font-bold",
+                              partition.lag === 0 ? "text-green-400" : partition.lag < 100 ? "text-yellow-400" : "text-red-400"
+                            )}>
+                              {partition.lag?.toLocaleString() || '0'}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {!consumerLag?.topics || Object.keys(consumerLag.topics).length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No lag information available for this consumer group
+                </div>
+              )}
+            </div>
+          )}
         </ScrollArea>
       </DialogContent>
     </Dialog>

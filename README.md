@@ -104,7 +104,7 @@ See [`docs/STREAMS_CONFIG.md`](docs/STREAMS_CONFIG.md) for full documentation.
 
 ### Visual Indicators
 
-- **🌟 Live** (Green badge) — Consumers auto-discovered from Kafka consumer groups in real-time
+- **🌟 Live** (Green badge) — Consumers auto-discovered from Kafka consumer groups in real-time. **Click consumer nodes** to view lag per partition.
 - **⚡ JMX** (Yellow badge) — Active producers detected from JMX metrics (topics receiving messages NOW)
 - **📄 Schema Nodes** — Topics with registered schemas show small linked schema nodes. **Click the schema node** to view the full schema definition in a dialog.
 

@@ -10,6 +10,8 @@ from typing import Any
 import httpx
 import yaml
 from confluent_kafka.admin import AdminClient
+from confluent_kafka import Consumer, TopicPartition, KafkaException
+from confluent_kafka._model import ConsumerGroupTopicPartitions
 
 logger = logging.getLogger(__name__)
 
@@ -580,6 +582,104 @@ class KafkaService:
         except Exception as e:
             logger.error(f"Failed to fetch schema for {subject}: {e}")
             raise RuntimeError(f"Schema not found: {subject}") from e
+    
+    def fetch_consumer_lag(self, bootstrap_servers: str, group_id: str) -> dict[str, Any]:
+        """
+        Fetch consumer lag per partition for a specific consumer group.
+        Returns: {"topics": {"topic_name": {"partitions": [{"partition": 0, "currentOffset": 100, "logEndOffset": 150, "lag": 50}]}}}
+        """
+        try:
+            bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
+            admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
+            
+            logger.info(f"Fetching consumer lag for group: {group_id}")
+            
+            # Get committed offsets for this consumer group
+            group_request = ConsumerGroupTopicPartitions(group_id)
+            group_metadata = admin.list_consumer_group_offsets([group_request], request_timeout=10)
+            result = {"topics": {}}
+            
+            if not group_metadata:
+                logger.warning(f"No metadata found for group {group_id}")
+                return result
+            
+            for group_id_key, future in group_metadata.items():
+                try:
+                    group_topic_partitions = future.result(timeout=10)
+                    # Extract the actual topic partitions list from the ConsumerGroupTopicPartitions object
+                    partitions_metadata = group_topic_partitions.topic_partitions
+                    
+                    partition_count = len(partitions_metadata) if partitions_metadata else 0
+                    logger.info(f"Found {partition_count} partitions for group {group_id_key}")
+                    
+                    if not partitions_metadata:
+                        logger.warning(f"Consumer group {group_id} has no committed offsets")
+                        return result
+                    
+                    # Group by topic - for now, just show committed offsets
+                    # We'll calculate lag by querying high water marks
+                    topics_data = {}
+                    
+                    # Collect all topic-partitions to query watermarks in batch
+                    tp_list = []
+                    for tp in partitions_metadata:
+                        tp_list.append((tp.topic, tp.partition, tp.offset))
+                    
+                    # Create a single consumer for batch watermark queries
+                    if tp_list:
+                        temp_consumer = None
+                        try:
+                            temp_consumer = Consumer({
+                                'bootstrap.servers': ",".join(bootstrap_list),
+                                'group.id': f'streamlens-lag-{os.getpid()}',
+                                'enable.auto.commit': False,
+                                'socket.timeout.ms': 5000,
+                                'api.version.request': False,
+                            })
+                            
+                            # Query watermarks
+                            for topic, partition, committed_offset in tp_list:
+                                try:
+                                    # Don't assign, just query watermarks directly
+                                    topic_partition = TopicPartition(topic, partition)
+                                    low, high = temp_consumer.get_watermark_offsets(topic_partition, cached=False, timeout=2.0)
+                                    lag = max(0, high - committed_offset) if committed_offset >= 0 else high
+                                    
+                                    if topic not in topics_data:
+                                        topics_data[topic] = {"partitions": []}
+                                    
+                                    topics_data[topic]["partitions"].append({
+                                        "partition": partition,
+                                        "currentOffset": committed_offset,
+                                        "logEndOffset": high,
+                                        "lag": lag,
+                                    })
+                                except Exception as wm_err:
+                                    logger.warning(f"Watermark query failed for {topic}:{partition}: {wm_err}")
+                                    # Fallback: add partition info without lag
+                                    if topic not in topics_data:
+                                        topics_data[topic] = {"partitions": []}
+                                    topics_data[topic]["partitions"].append({
+                                        "partition": partition,
+                                        "currentOffset": committed_offset,
+                                        "logEndOffset": committed_offset if committed_offset >= 0 else 0,
+                                        "lag": 0,
+                                    })
+                        finally:
+                            if temp_consumer:
+                                temp_consumer.close()
+                    
+                    result = {"topics": topics_data}
+                    logger.info(f"Successfully fetched lag for {len(topics_data)} topics")
+                except Exception as e:
+                    logger.error(f"Failed to get lag for group {group_id_key}: {e}", exc_info=True)
+                    raise
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch consumer lag for {group_id}: {e}", exc_info=True)
+            raise RuntimeError(f"Could not fetch consumer lag for {group_id}: {str(e)}") from e
 
     def _load_streams_config(self) -> list[dict[str, Any]]:
         """
