@@ -354,24 +354,6 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                       Active producers detected from JMX metrics. Shows topics receiving messages <i>right now</i>. Requires JMX enabled on brokers.
                     </p>
                   </div>
-                  <div className="flex items-start gap-2">
-                    <div className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-950/30 px-1.5 py-0.5 rounded border border-amber-900/50 whitespace-nowrap mt-0.5">
-                      <Shield className="w-3 h-3" />
-                      <span>ACL</span>
-                    </div>
-                    <p className="text-muted-foreground text-xs leading-relaxed">
-                      Potential producers derived from Kafka ACLs (WRITE permissions). Shows who <i>can</i> produce, not who <i>is</i> producing.
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="flex items-center gap-1 text-[10px] text-purple-400 bg-purple-950/30 px-1.5 py-0.5 rounded border border-purple-900/50 whitespace-nowrap mt-0.5">
-                      <User className="w-3 h-3" />
-                      <span>Config</span>
-                    </div>
-                    <p className="text-muted-foreground text-xs leading-relaxed">
-                      Kafka Streams apps configured in streams.yaml. Use this to explicitly link input → output topics.
-                    </p>
-                  </div>
                 </div>
               </div>
             </PopoverContent>

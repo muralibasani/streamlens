@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Database, Activity, Box, ArrowRightLeft, FileJson, GitBranch, Sparkles, Shield, User, Zap } from 'lucide-react';
+import { Activity, Box, ArrowRightLeft, FileJson, GitBranch, Sparkles, Shield, User, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -9,10 +9,32 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+// Custom horizontal cylinder icon for Kafka topics
+const CylinderIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {/* Left ellipse (vertical) */}
+    <ellipse cx="5" cy="12" rx="2.5" ry="8" />
+    {/* Right ellipse (vertical) */}
+    <ellipse cx="19" cy="12" rx="2.5" ry="8" />
+    {/* Top line connecting ellipses */}
+    <line x1="5" y1="4" x2="19" y2="4" />
+    {/* Bottom line connecting ellipses */}
+    <line x1="5" y1="20" x2="19" y2="20" />
+  </svg>
+);
+
 // Custom node component for distinct visual styles per Kafka entity type
 const NodeIcon = ({ type }: { type: string }) => {
   switch (type) {
-    case 'topic': return <Database className="w-5 h-5 text-[hsl(var(--node-topic))]" />;
+    case 'topic': return <CylinderIcon className="w-5 h-5 text-[hsl(var(--node-topic))]" />;
     case 'producer': return <Box className="w-5 h-5 text-[hsl(var(--node-producer))]" />;
     case 'consumer': return <Activity className="w-5 h-5 text-[hsl(var(--node-consumer))]" />;
     case 'streams': return <GitBranch className="w-5 h-5 text-[hsl(var(--node-streams))]" />;
