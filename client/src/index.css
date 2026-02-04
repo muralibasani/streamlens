@@ -1,0 +1,97 @@
+@import 'reactflow/dist/style.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Kafka-inspired Dark Theme */
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+
+  /* Kafka Orange Primary */
+  --primary: 12 85% 55%;
+  --primary-foreground: 0 0% 98%;
+
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 12 85% 55%;
+
+  --radius: 0.5rem;
+
+  /* Graph Node Colors */
+  --node-topic: 35 90% 50%;     /* Orange/Yellow */
+  --node-producer: 210 80% 60%; /* Blue */
+  --node-consumer: 145 70% 50%; /* Green */
+  --node-streams: 185 70% 45%;   /* Teal */
+  --node-connector: 270 70% 60%;/* Purple */
+  --node-schema: 0 0% 50%;      /* Grey */
+}
+
+/* Animated dashed line for Kafka Streams edges */
+@keyframes streams-edge-dash {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+.react-flow__edge-streams-animated {
+  animation: streams-edge-dash 0.8s linear infinite;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased font-sans;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-semibold;
+  }
+
+  code, pre {
+    @apply font-mono;
+  }
+}
+
+/* React Flow Customization */
+.react-flow__node {
+  @apply rounded-xl border border-border shadow-lg transition-all duration-300;
+}
+
+.react-flow__node:hover {
+  @apply shadow-primary/20 ring-1 ring-primary/50;
+}
+
+.react-flow__edge-path {
+  stroke: hsl(var(--muted-foreground));
+  stroke-width: 1.5;
+}
+
+.react-flow__controls {
+  @apply bg-card border border-border rounded-lg shadow-xl !important;
+}
+
+.react-flow__controls-button {
+  @apply border-border border-b last:border-b-0 fill-foreground hover:bg-accent hover:text-accent-foreground !important;
+}
