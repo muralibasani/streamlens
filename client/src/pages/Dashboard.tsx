@@ -163,13 +163,13 @@ export default function Dashboard() {
               <img src="/streamlens-logo.svg" alt="" className="h-9 w-9 object-contain" />
               <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-primary/10 to-transparent blur-xl -z-10" />
             </div>
-            <div className="space-y-2 pt-0.5">
+            <div className="space-y-1 pt-0.5">
               <h2 className="text-4xl font-extrabold tracking-tight sm:text-3xl">
                 <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text text-transparent">
                   StreamLens
                 </span>
               </h2>
-              <p className="max-w-md text-base text-muted-foreground xsm:text-lg">
+              <p className="max-w-sm text-sm leading-snug text-muted-foreground">
                 Visualize, analyze your Apache Kafka streaming platform.
               </p>
             </div>
