@@ -17,16 +17,10 @@
 
 ## Producers (who produces to which topic)
 
-- **Source**: **None from the broker.** Kafka does not expose “who produces to which topic.” Producers are just clients; the broker does not register them.
-- **Options**:
-  1. **App registration (no code changes)**  
-     Register apps in this UI (or via API): app name + role “producer” + list of topics.  
-     Use **Register app** on the cluster / topology, or:
-     - `POST /api/clusters/{id}/registrations`  
-       Body: `{ "appName": "my-producer", "role": "producer", "topics": ["my-topic"] }`
-     Then click **Sync** so the topology is rebuilt with these registrations.
-  2. **Interceptors / agent (optional)**  
-     You could add a producer interceptor or a small agent that reports “app X produces to topic Y” to a service; this app would then need to ingest that. Not required if you use app registration above.
+- **Source**: Kafka does not expose "who produces to which topic" from the broker. Producers are discovered via:
+  1. **JMX** (recommended) — Enable JMX on brokers and configure JMX host/port in the cluster. Topics with active message flow show as producer nodes. See README JMX section.
+  2. **ACLs** — If Kafka ACLs are enabled, principals with WRITE permission on topics appear as potential producers.
+- Click **Sync** to refresh the topology after configuring JMX or ACLs.
 
 ## Summary
 
@@ -34,6 +28,7 @@
 |------------|----------------------------------------|-------------------------------------------------|
 | Topics     | From broker                            | Nothing                                        |
 | Consumers  | From broker (consumer groups)          | Consumer with `group.id`, running; then Sync   |
-| Producers  | Not from broker                        | Register app (UI or API); then Sync            |
+| Producers  | JMX or ACLs                            | JMX enabled on brokers, or ACLs; then Sync     |
+| Connectors | Kafka Connect REST API                 | Connect URL in cluster; then Sync               |
 
-No interceptors are required. Use **Register app** (or the registrations API) for producers; use a normal consumer group for consumers and refresh topology while the consumer is running.
+Use a normal consumer group for consumers and refresh topology while the consumer is running. Enable JMX for producer visibility.

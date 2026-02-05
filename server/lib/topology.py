@@ -1,53 +1,13 @@
 from .kafka import kafka_service
 
 
-def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | None = None) -> dict:
-    """Build topology graph from real cluster state and optional app registrations."""
+def build_topology(cluster_id: int, cluster: dict) -> dict:
+    """Build topology graph from real cluster state."""
     try:
         state = kafka_service.fetch_system_state(cluster)
     except Exception:
-        # Kafka unreachable or any error: still build from registrations (streams, producers, consumers)
         state = kafka_service._empty_state()
-    
-    # Merge manual registrations (user-provided metadata)
-    # Auto-discovered consumers are already in state["consumers"] from fetch_system_state
-    # Auto-discovered producers (from ACLs) are already in state["producers"]
-    for reg in registrations or []:
-        app_name = reg.get("appName") or reg.get("app_name", "")
-        role = (reg.get("role") or "producer").lower()
-        topics = reg.get("topics") or []
-        output_topics = reg.get("outputTopics") or reg.get("output_topics") or []
-        if not app_name:
-            continue
-        node_id = f"app:{app_name}"
-        if role == "streams":
-            in_list = list(topics) if topics else []
-            out_list = list(output_topics) if output_topics else []
-            if not in_list and not out_list:
-                continue
-            state["streams"].append({
-                "id": node_id,
-                "label": app_name,
-                "consumesFrom": in_list,
-                "producesTo": out_list,
-                "source": "manual",  # Manual registration
-            })
-        elif role == "producer":
-            if not topics:
-                continue
-            state["producers"].append({
-                "id": node_id,
-                "producesTo": topics,
-                "source": "manual",  # Manual registration
-            })
-        else:  # consumer
-            if not topics:
-                continue
-            state["consumers"].append({
-                "id": node_id,
-                "consumesFrom": topics,
-                "source": "manual",  # Manual registration
-            })
+
     nodes = []
     edges = []
 
@@ -61,7 +21,7 @@ def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | N
         nodes.append({"id": f"topic:{t['name']}", "type": "topic", "data": topic_data})
 
     # Ensure topic nodes exist for topics referenced by streams, producers, and consumers
-    # This handles cases where topics appear in registrations/JMX/ACLs but not in broker metadata
+    # This handles cases where topics appear in JMX/ACLs/connectors but not in broker metadata
     for s in state["streams"]:
         for name in s["consumesFrom"] + s["producesTo"]:
             if name not in topic_names:

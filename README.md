@@ -74,7 +74,7 @@ This makes StreamLens safe to use in production environments for monitoring and 
 - **server**: `DATABASE_URL` (optional; default: SQLite at `server/topology.db`; use `postgresql://...` and `uv sync --extra postgres` to switch to PostgreSQL). Optional: `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL` for AI query.
 - **client**: `VITE_API_URL` (optional, default `http://localhost:5000` for proxy target).
 
-## Topology: Auto-Discovery & Manual Registration
+## Topology: Auto-Discovery
 
 ### Auto-Discovered Entities (Real-Time, No Client Changes)
 
@@ -187,7 +187,7 @@ JMX configuration is saved in the database - no need to run `configure_jmx.py` a
 
 ### Troubleshooting
 
-Test if JMX is working:
+**Test if JMX is working:**
 ```bash
 cd server
 uv run python3 debug/test_jmx_connection.py

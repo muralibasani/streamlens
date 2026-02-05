@@ -22,9 +22,6 @@ from storage import (
     delete_cluster as db_delete_cluster,
     get_latest_snapshot,
     create_snapshot,
-    get_registrations,
-    upsert_registration,
-    delete_registration,
 )
 from lib.topology import build_topology
 from lib.ai import query_topology
@@ -42,13 +39,6 @@ class CreateClusterBody(BaseModel):
 class AiQueryBody(BaseModel):
     question: str
     topology: dict
-
-
-class RegistrationBody(BaseModel):
-    appName: str
-    role: str  # "producer", "consumer", or "streams"
-    topics: list[str]  # input topics (consumesFrom for consumer/streams, producesTo for producer)
-    outputTopics: list[str] | None = None  # for streams: output topics (producesTo)
 
 
 def seed_data(db: Session):
@@ -74,8 +64,7 @@ def indexer_loop():
             for c in clusters:
                 try:
                     print(f"Indexing cluster {c['name']}...")
-                    regs = get_registrations(db, c["id"])
-                    graph = build_topology(c["id"], c, regs)
+                    graph = build_topology(c["id"], c)
                     create_snapshot(db, c["id"], graph)
                 except Exception as e:
                     print(f"Indexer error for cluster {c['id']}: {e}")
@@ -139,6 +128,7 @@ def cluster_health(id: int, db: Session = Depends(get_db)):
         "clusterId": id,
         "online": health["online"],
         "error": health["error"],
+        "clusterMode": health.get("clusterMode"),
     }
 
 
@@ -154,8 +144,7 @@ def clusters_create(body: CreateClusterBody, db: Session = Depends(get_db)):
             jmx_host=body.jmxHost,
             jmx_port=body.jmxPort,
         )
-        regs = get_registrations(db, cluster["id"])
-        graph = build_topology(cluster["id"], cluster, regs)
+        graph = build_topology(cluster["id"], cluster)
         create_snapshot(db, cluster["id"], graph)
         return cluster
     except RuntimeError as e:
@@ -167,6 +156,12 @@ def clusters_create(body: CreateClusterBody, db: Session = Depends(get_db)):
 @app.put("/api/clusters/{id}")
 def clusters_update(id: int, body: CreateClusterBody, db: Session = Depends(get_db)):
     from storage import update_cluster as db_update_cluster
+    existing = get_cluster(db, id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    # Preserve JMX if not sent (e.g. Edit form didn't include them)
+    jmx_host = body.jmxHost if body.jmxHost is not None else existing.get("jmxHost")
+    jmx_port = body.jmxPort if body.jmxPort is not None else existing.get("jmxPort")
     cluster = db_update_cluster(
         db,
         id,
@@ -174,8 +169,8 @@ def clusters_update(id: int, body: CreateClusterBody, db: Session = Depends(get_
         bootstrap_servers=body.bootstrapServers,
         schema_registry_url=body.schemaRegistryUrl,
         connect_url=body.connectUrl,
-        jmx_host=body.jmxHost,
-        jmx_port=body.jmxPort,
+        jmx_host=jmx_host,
+        jmx_port=jmx_port,
     )
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
@@ -196,8 +191,7 @@ def topology_get(id: int, db: Session = Depends(get_db)):
     if snapshot:
         return snapshot
     try:
-        regs = get_registrations(db, id)
-        graph = build_topology(id, cluster, regs)
+        graph = build_topology(id, cluster)
         snapshot = create_snapshot(db, id, graph)
         return snapshot
     except RuntimeError as e:
@@ -212,8 +206,7 @@ def topology_refresh(id: int, db: Session = Depends(get_db)):
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     try:
-        regs = get_registrations(db, id)
-        graph = build_topology(id, cluster, regs)
+        graph = build_topology(id, cluster)
         return create_snapshot(db, id, graph)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -311,35 +304,6 @@ def get_consumer_lag(id: int, group_id: str, db: Session = Depends(get_db)):
         return kafka_service.fetch_consumer_lag(bootstrap_servers, group_id)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-
-@app.get("/api/clusters/{id}/registrations")
-def registrations_list(id: int, db: Session = Depends(get_db)):
-    if not get_cluster(db, id):
-        raise HTTPException(status_code=404, detail="Cluster not found")
-    return get_registrations(db, id)
-
-
-@app.post("/api/clusters/{id}/registrations")
-def registration_upsert(id: int, body: RegistrationBody, db: Session = Depends(get_db)):
-    if not get_cluster(db, id):
-        raise HTTPException(status_code=404, detail="Cluster not found")
-    if body.role not in ("producer", "consumer", "streams"):
-        raise HTTPException(status_code=400, detail="role must be 'producer', 'consumer', or 'streams'")
-    output_topics = body.outputTopics if body.role == "streams" else None
-    upsert_registration(db, id, body.appName.strip(), body.role, body.topics, output_topics=output_topics)
-    out = {"appName": body.appName, "role": body.role, "topics": body.topics}
-    if body.outputTopics is not None:
-        out["outputTopics"] = body.outputTopics
-    return out
-
-
-@app.delete("/api/clusters/{id}/registrations/{app_name}")
-def registration_delete(id: int, app_name: str, db: Session = Depends(get_db)):
-    if not get_cluster(db, id):
-        raise HTTPException(status_code=404, detail="Cluster not found")
-    delete_registration(db, id, app_name)
-    return Response(status_code=204)
 
 
 @app.post("/api/ai/query")

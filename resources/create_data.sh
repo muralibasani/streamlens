@@ -120,27 +120,6 @@ else
   echo "⚠️ Skipping consumers."
 fi
 
-# -------------------------------
-# Step 4: Register producers with StreamLens API
-# -------------------------------
-STREAMLENS_API="http://localhost:5000/api"
-CLUSTER_ID=1  # Change this to match your cluster ID
-
-echo "🚀 Registering producers with StreamLens..."
-for i in "${!TOPICS[@]}"; do
-  if (( i % 2 == 0 )); then
-    topic="${TOPICS[i]}"
-    APP_NAME="producer-${topic}"
-    echo "Registering producer: $APP_NAME for topic: $topic"
-    
-    curl -s -X POST "$STREAMLENS_API/clusters/$CLUSTER_ID/registrations" \
-      -H "Content-Type: application/json" \
-      -d "{\"appName\": \"$APP_NAME\", \"role\": \"producer\", \"topics\": [\"$topic\"]}" \
-      > /dev/null 2>&1
-  fi
-done
-echo "✅ Producers registered with StreamLens."
-
 echo ""
 echo "✅ Setup complete!"
 echo ""

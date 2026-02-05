@@ -22,31 +22,33 @@ class KafkaService:
 
     def check_cluster_health(self, bootstrap_servers: str) -> dict[str, Any]:
         """
-        Check if Kafka cluster is reachable.
-        Returns: {"online": bool, "error": str | None}
+        Check if Kafka cluster is reachable and detect controller mode.
+        Returns: {"online": bool, "error": str | None, "clusterMode": "kraft" | "zookeeper" | None}
         """
         if not bootstrap_servers:
-            return {"online": False, "error": "No bootstrap servers configured"}
-        
+            return {"online": False, "error": "No bootstrap servers configured", "clusterMode": None}
+
         bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
         if not bootstrap_list:
-            return {"online": False, "error": "Invalid bootstrap servers"}
-        
+            return {"online": False, "error": "Invalid bootstrap servers", "clusterMode": None}
+
         try:
             admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
-            # Try to get cluster metadata with short timeout
             metadata = admin.list_topics(timeout=5)
-            # Cluster is online if we can successfully get metadata, regardless of topic count
             if metadata is not None:
-                return {"online": True, "error": None}
-            return {"online": False, "error": "Failed to retrieve cluster metadata"}
+                # KRaft clusters expose __cluster_metadata in topic list; Zookeeper mode does not
+                mode: str | None = None
+                if getattr(metadata, "topics", None):
+                    mode = "kraft" if "__cluster_metadata" in metadata.topics else "zookeeper"
+                return {"online": True, "error": None, "clusterMode": mode}
+            return {"online": False, "error": "Failed to retrieve cluster metadata", "clusterMode": None}
         except Exception as e:
             error_msg = str(e)
             if "timed out" in error_msg.lower():
                 error_msg = "Connection timeout - cluster unreachable"
             elif "failed to resolve" in error_msg.lower():
                 error_msg = "Cannot resolve bootstrap servers"
-            return {"online": False, "error": error_msg}
+            return {"online": False, "error": error_msg, "clusterMode": None}
 
     def fetch_system_state(self, cluster: dict[str, Any]) -> dict[str, Any]:
         """
@@ -92,6 +94,7 @@ class KafkaService:
             producers.extend(acl_producers)
             
             state["producers"] = producers
+            logger.info("Topology state: %d producers (will appear in UI after Sync)", len(producers))
             
             # Load configured Kafka Streams applications (from streams.yaml)
             state["streams"] = self._load_streams_config()

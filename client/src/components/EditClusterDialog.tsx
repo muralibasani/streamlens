@@ -32,6 +32,8 @@ interface EditClusterDialogProps {
     bootstrapServers: string;
     schemaRegistryUrl?: string | null;
     connectUrl?: string | null;
+    jmxHost?: string | null;
+    jmxPort?: number | null;
   };
 }
 
@@ -46,6 +48,8 @@ export function EditClusterDialog({ open, onOpenChange, cluster }: EditClusterDi
       bootstrapServers: cluster.bootstrapServers,
       schemaRegistryUrl: cluster.schemaRegistryUrl || "",
       connectUrl: cluster.connectUrl || "",
+      jmxHost: cluster.jmxHost || "",
+      jmxPort: cluster.jmxPort ?? undefined,
     },
   });
 
@@ -56,6 +60,8 @@ export function EditClusterDialog({ open, onOpenChange, cluster }: EditClusterDi
       bootstrapServers: cluster.bootstrapServers,
       schemaRegistryUrl: cluster.schemaRegistryUrl || "",
       connectUrl: cluster.connectUrl || "",
+      jmxHost: cluster.jmxHost || "",
+      jmxPort: cluster.jmxPort ?? undefined,
     });
   }, [cluster, form]);
 
@@ -142,6 +148,44 @@ export function EditClusterDialog({ open, onOpenChange, cluster }: EditClusterDi
                   <FormLabel>Kafka Connect URL (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="http://localhost:8083" value={field.value || ''} onChange={field.onChange} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="jmxHost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>JMX Host (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="localhost" value={field.value || ''} onChange={field.onChange} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="jmxPort"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>JMX Port (Optional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      placeholder="9999"
+                      value={field.value ?? ""}
+                      onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") field.onChange(undefined);
+                    else {
+                      const n = parseInt(raw, 10);
+                      field.onChange(Number.isNaN(n) ? undefined : n);
+                    }
+                  }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

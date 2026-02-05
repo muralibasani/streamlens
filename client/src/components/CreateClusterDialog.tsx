@@ -36,6 +36,8 @@ export function CreateClusterDialog() {
       bootstrapServers: "",
       schemaRegistryUrl: "",
       connectUrl: "",
+      jmxHost: "",
+      jmxPort: undefined as number | undefined,
     },
   });
 
@@ -126,6 +128,44 @@ export function CreateClusterDialog() {
                   <FormLabel>Kafka Connect URL (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="http://localhost:8083" value={field.value || ''} onChange={field.onChange} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="jmxHost"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>JMX Host (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="localhost" value={field.value || ''} onChange={field.onChange} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="jmxPort"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>JMX Port (Optional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      placeholder="9999"
+                      value={field.value ?? ""}
+                      onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") field.onChange(undefined);
+                    else {
+                      const n = parseInt(raw, 10);
+                      field.onChange(Number.isNaN(n) ? undefined : n);
+                    }
+                  }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

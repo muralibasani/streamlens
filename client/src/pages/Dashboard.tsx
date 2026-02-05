@@ -79,6 +79,14 @@ function ClusterCard({ cluster, onEdit, onDelete }: { cluster: any; onEdit: (clu
                 <span className="truncate">{cluster.connectUrl}</span>
               </div>
             )}
+            {health?.clusterMode && (
+              <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                <span>Mode:</span>
+                <span className={health.clusterMode === "kraft" ? "text-emerald-500" : "text-amber-500/90"}>
+                  {health.clusterMode === "kraft" ? "KRaft" : "Zookeeper"}
+                </span>
+              </div>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
