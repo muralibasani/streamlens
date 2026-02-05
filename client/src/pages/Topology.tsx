@@ -16,7 +16,7 @@ import { StreamsEdge } from "@/components/StreamsEdge";
 import { AiChatPanel } from "@/components/AiChatPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
@@ -92,8 +92,9 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
     const producers = nodes.filter(n => n.data?.type === 'producer' || n.id?.startsWith('jmx:')).length;
     const consumers = nodes.filter(n => n.data?.type === 'consumer' || n.id?.startsWith('group:')).length;
     const streams = nodes.filter(n => n.data?.type === 'streams').length;
+    const connectors = nodes.filter(n => n.data?.type === 'connector' || n.id?.startsWith('connect:')).length;
     
-    return { topics, schemas, producers, consumers, streams };
+    return { topics, schemas, producers, consumers, streams, connectors };
   }, [nodes]);
 
   // Transform snapshot data into ReactFlow elements
@@ -355,6 +356,15 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                   </span>
                 </>
               )}
+              {cluster?.connectUrl && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 text-purple-400">
+                    <span>Connect:</span>
+                    <span>{cluster.connectUrl}</span>
+                  </span>
+                </>
+              )}
               <span>•</span>
               <span>ID: {clusterId}</span>
             </div>
@@ -559,6 +569,15 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                     <span className="text-muted-foreground">Streams Apps</span>
                   </div>
                   <span className="font-bold text-foreground">{entityCounts.streams}</span>
+                </div>
+              )}
+              {entityCounts.connectors > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <ArrowRightLeft className="w-3 h-3 text-[hsl(var(--node-connector))]" />
+                    <span className="text-muted-foreground">Connectors</span>
+                  </div>
+                  <span className="font-bold text-foreground">{entityCounts.connectors}</span>
                 </div>
               )}
             </div>

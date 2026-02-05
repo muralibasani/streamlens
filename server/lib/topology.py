@@ -172,7 +172,9 @@ def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | N
     for c in state["connectors"]:
         if c["id"] not in connector_nodes_added:
             connector_nodes_added.add(c["id"])
-            nodes.append({"id": c["id"], "type": "connector", "data": {"label": c["id"], "type": c["type"]}})
+            # Clean up label: remove "connect:" prefix for display
+            connector_label = c["id"].replace("connect:", "", 1) if c["id"].startswith("connect:") else c["id"]
+            nodes.append({"id": c["id"], "type": "connector", "data": {"label": connector_label, "type": c["type"]}})
         topic = c.get("topic") or "?"
         if topic != "?":
             if c["type"] == "sink":

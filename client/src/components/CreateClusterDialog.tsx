@@ -125,7 +125,7 @@ export function CreateClusterDialog() {
                 <FormItem>
                   <FormLabel>Kafka Connect URL (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://..." value={field.value || ''} onChange={field.onChange} />
+                    <Input placeholder="http://localhost:8083" value={field.value || ''} onChange={field.onChange} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

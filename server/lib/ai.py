@@ -29,12 +29,13 @@ Important:
 - For questions about "consumers of X topic", include consumer node IDs and the topic node ID
 - For questions about "topics produced by X", include the producer/app node ID and all relevant topic node IDs
 - For questions about schemas, include schema node IDs (format: "schema:subject-name") and their linked topic nodes
-- Always include the full node ID as it appears in the graph (e.g., "topic:testtopic", "group:mygroup", "jmx:active-producer:testtopic", "schema:orders-value")
+- For questions about connectors, include connector node IDs (format: "connect:connector-name") and their linked topic nodes
+- Always include the full node ID as it appears in the graph (e.g., "topic:testtopic", "group:mygroup", "jmx:active-producer:testtopic", "schema:orders-value", "connect:file-source")
 
 Output format (JSON only):
 {{
   "answer": "Plain English explanation...",
-  "highlightNodes": ["topic:orders", "group:checkout-consumer", "jmx:active-producer:orders"]
+  "highlightNodes": ["topic:orders", "group:checkout-consumer", "jmx:active-producer:orders", "connect:jdbc-sink", "schema:orders-value"]
 }}
 """
     try:

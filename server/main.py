@@ -266,6 +266,31 @@ def get_topic_details(id: int, topic_name: str, include_messages: bool = False, 
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@app.get("/api/clusters/{id}/connector/{connector_name}/details")
+def get_connector_details(id: int, connector_name: str, db: Session = Depends(get_db)):
+    """
+    Fetch detailed configuration for a specific connector.
+    Sensitive values are masked.
+    Called on-demand when user clicks on a connector node.
+    """
+    from lib.kafka import kafka_service
+    
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    connect_url = cluster.get("connectUrl")
+    if not connect_url:
+        raise HTTPException(status_code=400, detail="Kafka Connect URL not configured for this cluster")
+    
+    try:
+        # Strip "connect:" prefix if present (node ID format)
+        clean_name = connector_name.replace("connect:", "", 1) if connector_name.startswith("connect:") else connector_name
+        return kafka_service.fetch_connector_details(connect_url.rstrip("/"), clean_name)
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @app.get("/api/clusters/{id}/consumer/{group_id}/lag")
 def get_consumer_lag(id: int, group_id: str, db: Session = Depends(get_db)):
     """

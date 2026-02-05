@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Server, Activity, Trash2, ArrowRight, Database, Edit, XCircle } from "lucide-react";
+import { MoreHorizontal, Server, Activity, Trash2, ArrowRight, Database, Edit, XCircle, ArrowRightLeft } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 
@@ -71,6 +71,12 @@ function ClusterCard({ cluster, onEdit, onDelete }: { cluster: any; onEdit: (clu
               <div className="font-mono text-xs truncate flex items-center gap-2 text-blue-400" title={cluster.schemaRegistryUrl}>
                 <Database className="w-3 h-3 flex-shrink-0" />
                 <span className="truncate">{cluster.schemaRegistryUrl}</span>
+              </div>
+            )}
+            {cluster.connectUrl && (
+              <div className="font-mono text-xs truncate flex items-center gap-2 text-purple-400" title={cluster.connectUrl}>
+                <ArrowRightLeft className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">{cluster.connectUrl}</span>
               </div>
             )}
           </CardDescription>

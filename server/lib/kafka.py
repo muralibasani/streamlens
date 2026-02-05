@@ -493,6 +493,53 @@ class KafkaService:
         
         return producers
 
+    def fetch_connector_details(self, connect_url: str, connector_name: str) -> dict[str, Any]:
+        """
+        Fetch detailed configuration for a specific connector.
+        Masks sensitive configuration values (passwords, keys, secrets).
+        """
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                r = client.get(f"{connect_url}/connectors/{connector_name}")
+                r.raise_for_status()
+                info = r.json()
+                
+                # Mask sensitive config keys
+                config = info.get("config", {})
+                masked_config = {}
+                
+                # List of config keys that contain sensitive information
+                sensitive_keywords = [
+                    'password', 'passwd', 'pwd',
+                    'secret', 'key', 'token',
+                    'credential', 'auth',
+                    'ssl.key', 'ssl.truststore.password', 'ssl.keystore.password',
+                    'sasl.jaas.config', 'connection.password',
+                    'aws.secret', 'azure.client.secret',
+                    'api.key', 'api.secret'
+                ]
+                
+                for key, value in config.items():
+                    # Check if the key contains any sensitive keywords
+                    key_lower = key.lower()
+                    is_sensitive = any(keyword in key_lower for keyword in sensitive_keywords)
+                    
+                    if is_sensitive and value:
+                        masked_config[key] = "********"
+                    else:
+                        masked_config[key] = value
+                
+                return {
+                    "name": info.get("name"),
+                    "type": info.get("type", "unknown"),
+                    "config": masked_config,
+                    "tasks": info.get("tasks", []),
+                    "connectorClass": config.get("connector.class", "N/A"),
+                }
+        except Exception as e:
+            logger.error(f"Failed to fetch connector details for {connector_name}: {e}")
+            raise RuntimeError(f"Could not fetch connector details: {str(e)}") from e
+    
     def _fetch_connectors(self, connect_url: str) -> list[dict[str, Any]]:
         connectors = []
         with httpx.Client(timeout=10.0) as client:

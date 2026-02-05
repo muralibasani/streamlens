@@ -129,6 +129,10 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
   const [isLoadingTopic, setIsLoadingTopic] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
+  
+  const [showConnectorDialog, setShowConnectorDialog] = useState(false);
+  const [connectorDetails, setConnectorDetails] = useState<any>(null);
+  const [isLoadingConnector, setIsLoadingConnector] = useState(false);
 
   const fetchSchemaVersion = async (version?: number) => {
     setIsLoadingSchema(true);
@@ -224,6 +228,27 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
     }
   };
 
+  const handleConnectorClick = async () => {
+    if (data.type !== 'connector') return;
+    
+    setShowConnectorDialog(true);
+    setIsLoadingConnector(true);
+    
+    try {
+      // Extract connector name from node ID (format: "connect:connector-name")
+      const connectorName = data.label || '';
+      const res = await fetch(`/api/clusters/${clusterId}/connector/${encodeURIComponent(connectorName)}/details`);
+      if (res.ok) {
+        const details = await res.json();
+        setConnectorDetails(details);
+      }
+    } catch (error) {
+      console.error('Failed to fetch connector details:', error);
+    } finally {
+      setIsLoadingConnector(false);
+    }
+  };
+
   return (
     <>
       <div 
@@ -235,12 +260,14 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
           "hover:border-primary/50",
           data.type === 'topic' && "cursor-pointer hover:border-purple-500 hover:shadow-purple-500/20",
           data.type === 'schema' && "cursor-pointer hover:border-blue-500 hover:shadow-blue-500/20",
-          data.type === 'consumer' && "cursor-pointer hover:border-green-500 hover:shadow-green-500/20"
+          data.type === 'consumer' && "cursor-pointer hover:border-green-500 hover:shadow-green-500/20",
+          data.type === 'connector' && "cursor-pointer hover:border-orange-500 hover:shadow-orange-500/20"
         )}
         onClick={
           data.type === 'topic' ? handleTopicClick : 
           data.type === 'schema' ? handleSchemaClick : 
           data.type === 'consumer' ? handleConsumerClick : 
+          data.type === 'connector' ? handleConnectorClick :
           undefined
         }
       >
@@ -607,6 +634,81 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
                     No recent messages found. This topic may be empty or no producers are currently active.
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+
+    {/* Connector Details Dialog */}
+    <Dialog open={showConnectorDialog} onOpenChange={setShowConnectorDialog}>
+      <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowRightLeft className="w-5 h-5 text-orange-500" />
+            Connector: {data.label}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <ScrollArea className="h-[60vh] pr-4">
+          {isLoadingConnector && (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          )}
+          
+          {!isLoadingConnector && connectorDetails && (
+            <div className="space-y-6">
+              {/* Connector Info */}
+              <div className="border border-border rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-4">Connector Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Name</div>
+                    <div className="font-mono text-sm">{connectorDetails.name}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Type</div>
+                    <div className="font-mono text-sm">
+                      <span className={cn(
+                        "px-2 py-1 rounded",
+                        connectorDetails.type === 'source' ? "bg-green-950/30 text-green-400" : "bg-blue-950/30 text-blue-400"
+                      )}>
+                        {connectorDetails.type}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-muted-foreground text-xs mb-1">Connector Class</div>
+                    <div className="font-mono text-xs break-all">{connectorDetails.connectorClass}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Tasks</div>
+                    <div className="font-bold text-lg">{connectorDetails.tasks?.length || 0}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Connector Configuration */}
+              <div className="border border-border rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-4">Configuration</h3>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {Object.entries(connectorDetails.config || {}).map(([key, value]: [string, any]) => (
+                    <div key={key} className="bg-muted/30 rounded p-3">
+                      <div className="text-xs text-muted-foreground mb-1 font-semibold">{key}</div>
+                      <div className={cn(
+                        "font-mono text-xs break-all",
+                        value === '********' ? "text-yellow-400" : "text-foreground"
+                      )}>
+                        {String(value)}
+                        {value === '********' && (
+                          <span className="ml-2 text-[10px] text-yellow-400/70">(masked for security)</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
