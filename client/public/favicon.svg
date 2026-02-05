@@ -1,52 +1,35 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background circle with gradient -->
+<svg width="64" height="64" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="streamGradient" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#F4511E;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#F7931E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFC857;stop-opacity:1" />
     </linearGradient>
-    <linearGradient id="streamGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#FFE082;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#FFA726;stop-opacity:1" />
+    <linearGradient id="lensGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#50C9E9;stop-opacity:0.9" />
     </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
-  
-  <!-- Background -->
-  <circle cx="32" cy="32" r="30" fill="url(#bgGradient)"/>
-  
-  <!-- Stream flow icon - representing data flowing through nodes -->
-  <!-- Left node -->
-  <circle cx="18" cy="32" r="5" fill="#FFF" opacity="0.9"/>
-  
-  <!-- Middle node -->
-  <circle cx="32" cy="22" r="5" fill="#FFF" opacity="0.9"/>
-  <circle cx="32" cy="42" r="5" fill="#FFF" opacity="0.9"/>
-  
-  <!-- Right node -->
-  <circle cx="46" cy="32" r="5" fill="#FFF" opacity="0.9"/>
-  
-  <!-- Flow lines (animated-looking) -->
-  <path d="M 23 32 L 27 32" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
-  <path d="M 22 29 L 28 23" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
-  <path d="M 22 35 L 28 41" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
-  
-  <path d="M 37 22 L 41 26" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
-  <path d="M 37 42 L 41 38" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
-  <path d="M 37 32 L 41 32" stroke="url(#streamGradient)" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
-  
-  <!-- Flow dots (suggesting movement) -->
-  <circle cx="25" cy="32" r="1.5" fill="#FFE082">
-    <animate attributeName="cx" from="25" to="40" dur="2s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" from="1" to="0" dur="2s" repeatCount="indefinite"/>
-  </circle>
-  <circle cx="25" cy="26" r="1.5" fill="#FFE082">
-    <animate attributeName="cx" from="25" to="38" dur="2.2s" repeatCount="indefinite"/>
-    <animate attributeName="cy" from="26" to="28" dur="2.2s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" from="1" to="0" dur="2.2s" repeatCount="indefinite"/>
-  </circle>
-  <circle cx="25" cy="38" r="1.5" fill="#FFE082">
-    <animate attributeName="cx" from="25" to="38" dur="1.8s" repeatCount="indefinite"/>
-    <animate attributeName="cy" from="38" to="36" dur="1.8s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" from="1" to="0" dur="1.8s" repeatCount="indefinite"/>
-  </circle>
+  <circle cx="100" cy="100" r="85" fill="url(#lensGradient)" opacity="0.15"/>
+  <g fill="none" stroke="url(#streamGradient)" stroke-width="4" stroke-linecap="round" filter="url(#glow)">
+    <path d="M 30 70 Q 70 65, 100 70 T 170 70" opacity="0.9"/>
+    <path d="M 20 100 Q 60 95, 100 100 T 180 100" opacity="1"/>
+    <path d="M 30 130 Q 70 135, 100 130 T 170 130" opacity="0.9"/>
+  </g>
+  <g fill="url(#streamGradient)">
+    <circle cx="40" cy="100" r="5"/>
+    <circle cx="80" cy="70" r="4"/>
+    <circle cx="60" cy="130" r="4"/>
+  </g>
+  <circle cx="100" cy="100" r="70" fill="none" stroke="url(#lensGradient)" stroke-width="3" opacity="0.4"/>
+  <circle cx="100" cy="100" r="75" fill="none" stroke="url(#lensGradient)" stroke-width="1.5" opacity="0.2"/>
+  <circle cx="100" cy="100" r="8" fill="url(#streamGradient)" opacity="0.8"/>
+  <circle cx="100" cy="100" r="12" fill="none" stroke="url(#streamGradient)" stroke-width="2" opacity="0.5"/>
 </svg>

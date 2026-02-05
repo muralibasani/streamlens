@@ -14,6 +14,7 @@ import { useTopology, useRefreshTopology, useCluster, useClusterHealth } from "@
 import TopologyNode from "@/components/TopologyNode";
 import { StreamsEdge } from "@/components/StreamsEdge";
 import { AiChatPanel } from "@/components/AiChatPanel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle, ArrowRightLeft } from "lucide-react";
@@ -320,8 +321,8 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
           </Link>
           <div className="flex items-center gap-3 pr-4 border-r border-border">
             <img 
-              src="https://kafka.apache.org/logos/kafka_logo--simple.png" 
-              alt="Kafka Logo" 
+              src="/streamlens-logo.svg" 
+              alt="StreamLens" 
               className="w-8 h-8 object-contain"
             />
             <span className="font-black text-2xl tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
@@ -485,6 +486,7 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
             <RefreshCw className={`w-4 h-4 mr-2 ${refreshTopology.isPending ? 'animate-spin' : ''}`} />
             Sync
           </Button>
+          <ThemeToggle />
         </div>
       </div>
 
