@@ -21,5 +21,4 @@ server/debug/__pycache__/
 .env
 .env.dev
 
-# Streams configuration (user-specific, environment-dependent)
-server/streams.yaml
+resources/logs/*

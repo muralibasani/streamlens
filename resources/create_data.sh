@@ -4,40 +4,37 @@ set -e
 BOOTSTRAP="localhost:9092"
 SCHEMA_REGISTRY="http://localhost:8081"
 
-CREATE_TOPICS=true       # set to false to skip topic creation
-START_PRODUCERS=true     # set to false to skip starting producers
-START_CONSUMERS=true     # set to false to skip starting consumers
-REGISTER_SCHEMAS=true     # set to false to skip registering schemas
+# Toggle features on/off
+CREATE_TOPICS=false       # set to false to skip topic creation
+START_PRODUCERS=false     # set to false to skip starting producers
+START_CONSUMERS=false     # set to false to skip starting consumers
+REGISTER_SCHEMAS=true   # set to false to skip registering schemas
 
+# Performance tuning - adjust based on your system resources
+# ⚠️  Default settings are optimized for local development
+MESSAGE_INTERVAL=2       # seconds between messages (2 = low load, 0.5 = medium, 0.1 = high)
+MAX_MESSAGES=100         # max messages per producer (100 = demo, 0 = unlimited)
+                         # With 4 producers: 100 msgs * 4 = 400 total messages
+
+# Resource usage examples:
+# - Light load (for older Macs):  MESSAGE_INTERVAL=5,  MAX_MESSAGES=50
+# - Default (recommended):        MESSAGE_INTERVAL=2,  MAX_MESSAGES=100
+# - Heavy load (stress test):     MESSAGE_INTERVAL=0.5, MAX_MESSAGES=0 (unlimited)
 
 # Create logs directory
 mkdir -p logs
 
-# List of 100 banking/finance topics
+# Reduced list of topics for demo (8 topics -> 4 producers/consumers)
+# Increase this list if you need more data
 TOPICS=(
 customer-accounts-topic
-customer-profile-topic
-customer-kyc-topic
-customer-risk-score-topic
-customer-notifications-topic
 transactions-topic
-transaction-audit-topic
-transaction-status-topic
-transaction-history-topic
-transaction-reversals-topic
 payments-topic
-payment-requests-topic
-payment-confirmations-topic
-payment-failures-topic
-payment-settlements-topic
 cards-authorization-topic
-cards-transactions-topic
-cards-fraud-check-topic
-cards-limits-topic
-cards-blocks-topic
 loans-applications-topic
-loans-approvals-topic
-# Add more if needed to reach 100
+notifications-topic
+fraud-detection-topic
+audit-log-topic
 )
 
 # -------------------------------
@@ -68,17 +65,26 @@ if [ "$START_PRODUCERS" = true ]; then
   for i in "${!TOPICS[@]}"; do
     if (( i % 2 == 0 )); then
       topic="${TOPICS[i]}"
-      echo "Starting producer for topic: $topic"
+      echo "Starting producer for topic: $topic (interval: ${MESSAGE_INTERVAL}s, max: ${MAX_MESSAGES:-unlimited})"
 
       (
+        count=0
         while true; do
+          # Check message limit (0 means unlimited)
+          if [ "$MAX_MESSAGES" -gt 0 ] && [ "$count" -ge "$MAX_MESSAGES" ]; then
+            echo "Reached max messages ($MAX_MESSAGES), stopping producer for $topic"
+            break
+          fi
+          
           ID=$RANDOM
           AMOUNT=$((RANDOM % 10000))
           TYPE=("payment" "deposit" "withdrawal" "transfer" "important")
           CHOICE=${TYPE[$RANDOM % ${#TYPE[@]}]}
           MSG="{\"id\":$ID,\"amount\":$AMOUNT,\"type\":\"$CHOICE\"}"
           echo "$MSG"
-          sleep 0.2
+          
+          count=$((count + 1))
+          sleep "$MESSAGE_INTERVAL"
         done
       ) | kafka-console-producer.sh \
            --bootstrap-server $BOOTSTRAP \
@@ -135,7 +141,26 @@ for i in "${!TOPICS[@]}"; do
 done
 echo "✅ Producers registered with StreamLens."
 
-echo "🛠️ Done. Use 'jobs' to see running processes or 'kill %N' to stop individual producers/consumers."
+echo ""
+echo "✅ Setup complete!"
+echo ""
+echo "📊 Statistics:"
+echo "   - Topics created: ${#TOPICS[@]}"
+echo "   - Producers started: $((${#TOPICS[@]} / 2))"
+echo "   - Consumers started: $((${#TOPICS[@]} / 2))"
+echo "   - Message rate: 1 msg every ${MESSAGE_INTERVAL}s per producer"
+echo "   - Max messages: ${MAX_MESSAGES:-unlimited} per producer"
+echo ""
+echo "🔧 Management:"
+echo "   - View running processes: jobs"
+echo "   - Stop all: pkill -f kafka-console-producer && pkill -f kafka-console-consumer"
+echo "   - Stop one: kill %N (use 'jobs' to find N)"
+echo "   - Or use: ./cleanup.sh"
+echo ""
+echo "💡 To reduce system load, edit this script and:"
+echo "   - Increase MESSAGE_INTERVAL (e.g., 5 seconds)"
+echo "   - Reduce MAX_MESSAGES (e.g., 50)"
+echo "   - Reduce number of topics in TOPICS array"
 
 if [ "$REGISTER_SCHEMAS" = true ]; then
   echo "🚀 Registering schemas for alternate topics..."

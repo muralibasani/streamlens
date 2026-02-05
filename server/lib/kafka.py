@@ -4,6 +4,7 @@ Uses confluent-kafka AdminClient, Kafka Connect REST API, and Schema Registry RE
 """
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -563,26 +564,180 @@ class KafkaService:
                     logger.debug("subject %s: %s", subject, e)
         return schemas
     
-    def fetch_schema_details(self, schema_url: str, subject: str) -> dict[str, Any]:
+    def fetch_schema_details(self, schema_url: str, subject: str, version: str | None = None) -> dict[str, Any]:
         """
-        Fetch full schema details for a specific subject (lazy loading).
-        Called on-demand when user hovers over a topic node.
+        Fetch full schema details for a specific subject and version.
+        If version is None, fetches latest version.
+        Also returns list of all available versions.
+        Called on-demand when user clicks on a schema node.
         """
         try:
             with httpx.Client(timeout=10.0) as client:
-                r = client.get(f"{schema_url}/subjects/{subject}/versions/latest")
+                # First, get all available versions
+                versions_response = client.get(f"{schema_url}/subjects/{subject}/versions")
+                versions_response.raise_for_status()
+                all_versions = versions_response.json()  # Returns list like [1, 2, 3]
+                
+                # Fetch the requested version (or latest)
+                version_path = version if version else "latest"
+                r = client.get(f"{schema_url}/subjects/{subject}/versions/{version_path}")
                 r.raise_for_status()
                 data = r.json()
+                
                 return {
                     "subject": subject,
                     "version": data.get("version", 0),
                     "id": data.get("id"),
                     "schema": data.get("schema"),  # Full schema content
                     "schemaType": data.get("schemaType", "AVRO"),
+                    "allVersions": all_versions,  # List of all available versions
                 }
         except Exception as e:
             logger.error(f"Failed to fetch schema for {subject}: {e}")
             raise RuntimeError(f"Schema not found: {subject}") from e
+    
+    def fetch_topic_details(self, bootstrap_servers: str, topic_name: str, include_messages: bool = False) -> dict[str, Any]:
+        """
+        Fetch detailed configuration and recent messages for a specific topic.
+        Returns: topic config + last 5 messages
+        """
+        try:
+            bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
+            admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
+            
+            logger.info(f"Fetching details for topic: {topic_name}")
+            
+            # Get topic configuration
+            from confluent_kafka.admin import ConfigResource, ResourceType
+            config_resource = ConfigResource(ResourceType.TOPIC, topic_name)
+            configs = admin.describe_configs([config_resource], request_timeout=10)
+            
+            topic_config = {}
+            for res, future in configs.items():
+                try:
+                    config_result = future.result()
+                    topic_config = {
+                        entry.name: entry.value 
+                        for entry in config_result.values() 
+                        if entry.value is not None
+                    }
+                except Exception as e:
+                    logger.warning(f"Could not fetch config for {topic_name}: {e}")
+            
+            # Get topic metadata (partitions, replication)
+            metadata = admin.list_topics(timeout=10)
+            topic_metadata = metadata.topics.get(topic_name)
+            
+            partitions_count = 0
+            replication_factor = 0
+            if topic_metadata and topic_metadata.partitions:
+                partitions_count = len(topic_metadata.partitions)
+                # Get replication factor from first partition
+                for partition in topic_metadata.partitions.values():
+                    if hasattr(partition, 'replicas') and partition.replicas:
+                        replication_factor = len(partition.replicas)
+                        break
+            
+            # Extract key configurations
+            retention_ms = topic_config.get('retention.ms', 'N/A')
+            retention_bytes = topic_config.get('retention.bytes', 'N/A')
+            cleanup_policy = topic_config.get('cleanup.policy', 'delete')
+            max_message_bytes = topic_config.get('max.message.bytes', 'N/A')
+            
+            # Convert retention.ms to human-readable format
+            if retention_ms != 'N/A':
+                try:
+                    ms = int(retention_ms)
+                    if ms == -1:
+                        retention_ms_display = 'Unlimited'
+                    else:
+                        # Convert to days/hours
+                        days = ms // (1000 * 60 * 60 * 24)
+                        hours = (ms % (1000 * 60 * 60 * 24)) // (1000 * 60 * 60)
+                        if days > 0:
+                            retention_ms_display = f"{days}d {hours}h"
+                        else:
+                            retention_ms_display = f"{hours}h"
+                except:
+                    retention_ms_display = retention_ms
+            else:
+                retention_ms_display = 'N/A'
+            
+            # Fetch recent messages (last 5) - only if requested
+            messages = []
+            if include_messages:
+                try:
+                    temp_consumer = Consumer({
+                        'bootstrap.servers': ",".join(bootstrap_list),
+                        'group.id': f'streamlens-viewer-{os.getpid()}',
+                        'enable.auto.commit': False,
+                        'auto.offset.reset': 'latest',  # Start from end
+                    })
+                    
+                    # Get all partitions for this topic
+                    partitions = [TopicPartition(topic_name, p) for p in range(partitions_count)]
+                    
+                    # Get high water marks (end offsets)
+                    for tp in partitions:
+                        low, high = temp_consumer.get_watermark_offsets(tp, cached=False, timeout=2.0)
+                        # Seek to 5 messages before the end (or beginning if less than 5)
+                        start_offset = max(0, high - 5)
+                        tp.offset = start_offset
+                    
+                    # Assign partitions
+                    temp_consumer.assign(partitions)
+                    
+                    # Consume up to 5 messages total across all partitions
+                    timeout = 3  # 3 second timeout
+                    start_time = time.time()
+                    
+                    while len(messages) < 5 and (time.time() - start_time) < timeout:
+                        msg = temp_consumer.poll(timeout=0.5)
+                        if msg is None:
+                            continue
+                        if msg.error():
+                            continue
+                        
+                        try:
+                            key_str = msg.key().decode('utf-8') if msg.key() else None
+                        except:
+                            key_str = str(msg.key()) if msg.key() else None
+                        
+                        try:
+                            value_str = msg.value().decode('utf-8') if msg.value() else None
+                        except:
+                            value_str = '<binary data>'
+                        
+                        messages.append({
+                            'partition': msg.partition(),
+                            'offset': msg.offset(),
+                            'timestamp': msg.timestamp()[1] if msg.timestamp()[0] else None,
+                            'key': key_str,
+                            'value': value_str,
+                        })
+                    
+                    temp_consumer.close()
+                    
+                except Exception as e:
+                    logger.warning(f"Could not fetch messages for {topic_name}: {e}")
+            
+            return {
+                'name': topic_name,
+                'partitions': partitions_count,
+                'replicationFactor': replication_factor,
+                'config': {
+                    'retentionMs': retention_ms,
+                    'retentionMsDisplay': retention_ms_display,
+                    'retentionBytes': retention_bytes,
+                    'cleanupPolicy': cleanup_policy,
+                    'maxMessageBytes': max_message_bytes,
+                },
+                'recentMessages': messages,
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch topic details for {topic_name}: {e}", exc_info=True)
+            raise RuntimeError(f"Could not fetch topic details: {str(e)}") from e
     
     def fetch_consumer_lag(self, bootstrap_servers: str, group_id: str) -> dict[str, Any]:
         """

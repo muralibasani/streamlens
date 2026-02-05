@@ -220,10 +220,12 @@ def topology_refresh(id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/clusters/{id}/schema/{subject}")
-def get_schema_details(id: int, subject: str, db: Session = Depends(get_db)):
+def get_schema_details(id: int, subject: str, version: str | None = None, db: Session = Depends(get_db)):
     """
-    Lazy-load schema details for a specific subject.
-    Called on-demand when user hovers over a topic node.
+    Lazy-load schema details for a specific subject and version.
+    If version is not provided, returns latest version.
+    Also returns list of all available versions.
+    Called on-demand when user clicks on a schema node.
     """
     from lib.kafka import kafka_service
     
@@ -236,7 +238,30 @@ def get_schema_details(id: int, subject: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Schema Registry not configured for this cluster")
     
     try:
-        return kafka_service.fetch_schema_details(schema_url.rstrip("/"), subject)
+        return kafka_service.fetch_schema_details(schema_url.rstrip("/"), subject, version)
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/clusters/{id}/topic/{topic_name}/details")
+def get_topic_details(id: int, topic_name: str, include_messages: bool = False, db: Session = Depends(get_db)):
+    """
+    Fetch detailed configuration for a specific topic.
+    Optionally fetch recent messages if include_messages=true.
+    Called on-demand when user clicks on a topic node.
+    """
+    from lib.kafka import kafka_service
+    
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    
+    bootstrap_servers = cluster.get("bootstrapServers")
+    if not bootstrap_servers:
+        raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
+    
+    try:
+        return kafka_service.fetch_topic_details(bootstrap_servers, topic_name, include_messages)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

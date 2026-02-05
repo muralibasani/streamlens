@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import { useRoute } from 'wouter';
 
 // Custom horizontal cylinder icon for Kafka topics
@@ -117,28 +118,46 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
   const [showSchemaDialog, setShowSchemaDialog] = useState(false);
   const [schemaDetails, setSchemaDetails] = useState<any>(null);
   const [isLoadingSchema, setIsLoadingSchema] = useState(false);
+  const [selectedSchemaVersion, setSelectedSchemaVersion] = useState<number | null>(null);
   
   const [showConsumerLagDialog, setShowConsumerLagDialog] = useState(false);
   const [consumerLag, setConsumerLag] = useState<any>(null);
   const [isLoadingLag, setIsLoadingLag] = useState(false);
+  
+  const [showTopicDialog, setShowTopicDialog] = useState(false);
+  const [topicDetails, setTopicDetails] = useState<any>(null);
+  const [isLoadingTopic, setIsLoadingTopic] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
 
-  const handleSchemaClick = async () => {
-    if (data.type !== 'schema') return;
-    
-    setShowSchemaDialog(true);
+  const fetchSchemaVersion = async (version?: number) => {
     setIsLoadingSchema(true);
     
     try {
-      const res = await fetch(`/api/clusters/${clusterId}/schema/${encodeURIComponent(data.subject)}`);
+      const versionParam = version ? `?version=${version}` : '';
+      const res = await fetch(`/api/clusters/${clusterId}/schema/${encodeURIComponent(data.subject)}${versionParam}`);
       if (res.ok) {
         const details = await res.json();
         setSchemaDetails(details);
+        setSelectedSchemaVersion(details.version);
       }
     } catch (error) {
       console.error('Failed to fetch schema:', error);
     } finally {
       setIsLoadingSchema(false);
     }
+  };
+
+  const handleSchemaClick = async () => {
+    if (data.type !== 'schema') return;
+    
+    setShowSchemaDialog(true);
+    setSelectedSchemaVersion(null);
+    await fetchSchemaVersion(); // Fetch latest version
+  };
+
+  const handleVersionChange = async (version: number) => {
+    await fetchSchemaVersion(version);
   };
 
   const handleConsumerClick = async () => {
@@ -162,6 +181,49 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
     }
   };
 
+  const handleTopicClick = async () => {
+    if (data.type !== 'topic') return;
+    
+    setShowTopicDialog(true);
+    setIsLoadingTopic(true);
+    setMessagesLoaded(false);
+    
+    try {
+      const topicName = data.label || '';
+      // Fetch only config, not messages
+      const res = await fetch(`/api/clusters/${clusterId}/topic/${encodeURIComponent(topicName)}/details`);
+      if (res.ok) {
+        const details = await res.json();
+        setTopicDetails(details);
+      }
+    } catch (error) {
+      console.error('Failed to fetch topic details:', error);
+    } finally {
+      setIsLoadingTopic(false);
+    }
+  };
+
+  const handleLoadMessages = async () => {
+    if (!topicDetails) return;
+    
+    setIsLoadingMessages(true);
+    
+    try {
+      const topicName = topicDetails.name || data.label || '';
+      // Fetch with messages included
+      const res = await fetch(`/api/clusters/${clusterId}/topic/${encodeURIComponent(topicName)}/details?include_messages=true`);
+      if (res.ok) {
+        const details = await res.json();
+        setTopicDetails(details);
+        setMessagesLoaded(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch topic messages:', error);
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  };
+
   return (
     <>
       <div 
@@ -171,10 +233,16 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
           isHighlighted ? "border-primary shadow-[0_0_20px_hsl(var(--primary)/0.3)] scale-105" : "",
           isSearchMatch ? "ring-2 ring-yellow-500/50" : "",
           "hover:border-primary/50",
+          data.type === 'topic' && "cursor-pointer hover:border-purple-500 hover:shadow-purple-500/20",
           data.type === 'schema' && "cursor-pointer hover:border-blue-500 hover:shadow-blue-500/20",
           data.type === 'consumer' && "cursor-pointer hover:border-green-500 hover:shadow-green-500/20"
         )}
-        onClick={data.type === 'schema' ? handleSchemaClick : data.type === 'consumer' ? handleConsumerClick : undefined}
+        onClick={
+          data.type === 'topic' ? handleTopicClick : 
+          data.type === 'schema' ? handleSchemaClick : 
+          data.type === 'consumer' ? handleConsumerClick : 
+          undefined
+        }
       >
         <Handle type="target" position={Position.Left} className="!bg-muted-foreground !w-2 !h-2" />
       
@@ -256,14 +324,40 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
             
             {!isLoadingSchema && schemaDetails && (
               <div className="space-y-4">
+                {/* Version Selector */}
+                {schemaDetails.allVersions && schemaDetails.allVersions.length > 1 && (
+                  <div className="border border-border rounded-lg p-4">
+                    <div className="text-sm font-semibold mb-3">Available Versions ({schemaDetails.allVersions.length})</div>
+                    <div className="flex flex-wrap gap-2">
+                      {schemaDetails.allVersions.map((version: number) => (
+                        <button
+                          key={version}
+                          onClick={() => handleVersionChange(version)}
+                          className={cn(
+                            "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                            version === schemaDetails.version
+                              ? "bg-primary text-primary-foreground shadow-md"
+                              : "bg-muted hover:bg-muted/70 text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          v{version}
+                          {version === Math.max(...schemaDetails.allVersions) && (
+                            <span className="ml-1 text-xs opacity-75">(latest)</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <div>
                     <div className="text-muted-foreground">Subject</div>
                     <div className="font-mono text-primary">{schemaDetails.subject}</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">Version</div>
-                    <div className="font-semibold">{schemaDetails.version}</div>
+                    <div className="text-muted-foreground">Current Version</div>
+                    <div className="font-semibold text-lg">v{schemaDetails.version}</div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">Type</div>
@@ -383,6 +477,137 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
                   No lag information available for this consumer group
                 </div>
               )}
+            </div>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+
+    {/* Topic Details Dialog */}
+    <Dialog open={showTopicDialog} onOpenChange={setShowTopicDialog}>
+      <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CylinderIcon className="w-5 h-5 text-purple-500" />
+            Topic: {data.label}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <ScrollArea className="h-[60vh] pr-4">
+          {isLoadingTopic && (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          )}
+          
+          {!isLoadingTopic && topicDetails && (
+            <div className="space-y-6">
+              {/* Topic Configuration */}
+              <div className="border border-border rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-4">Configuration</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Partitions</div>
+                    <div className="font-bold text-lg">{topicDetails.partitions}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Replication Factor</div>
+                    <div className="font-bold text-lg">{topicDetails.replicationFactor}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Cleanup Policy</div>
+                    <div className="font-mono text-sm">
+                      <span className={cn(
+                        "px-2 py-1 rounded",
+                        topicDetails.config?.cleanupPolicy === 'compact' ? "bg-blue-950/30 text-blue-400" : "bg-red-950/30 text-red-400"
+                      )}>
+                        {topicDetails.config?.cleanupPolicy || 'delete'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Retention Time</div>
+                    <div className="font-mono text-sm">{topicDetails.config?.retentionMsDisplay || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Retention Bytes</div>
+                    <div className="font-mono text-sm">{topicDetails.config?.retentionBytes === '-1' ? 'Unlimited' : topicDetails.config?.retentionBytes || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs mb-1">Max Message Size</div>
+                    <div className="font-mono text-sm">
+                      {topicDetails.config?.maxMessageBytes ? `${(parseInt(topicDetails.config.maxMessageBytes) / 1024 / 1024).toFixed(2)} MB` : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Messages - Load on Demand */}
+              <div className="border border-border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-lg">Recent Messages (Last 5)</h3>
+                  {!messagesLoaded && (
+                    <Button
+                      onClick={handleLoadMessages}
+                      disabled={isLoadingMessages}
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      {isLoadingMessages ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary"></div>
+                          Loading...
+                        </>
+                      ) : (
+                        'View Messages'
+                      )}
+                    </Button>
+                  )}
+                </div>
+                
+                {!messagesLoaded && !isLoadingMessages && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Click "View Messages" to load the last 5 messages from this topic
+                  </div>
+                )}
+                
+                {messagesLoaded && topicDetails.recentMessages && topicDetails.recentMessages.length > 0 && (
+                  <div className="space-y-3">
+                    {topicDetails.recentMessages.map((msg: any, idx: number) => (
+                      <div key={idx} className="bg-muted/30 rounded p-3 space-y-2">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <div className="flex items-center gap-4">
+                            <span>Partition: <span className="font-bold text-foreground">{msg.partition}</span></span>
+                            <span>Offset: <span className="font-bold text-foreground">{msg.offset}</span></span>
+                          </div>
+                          {msg.timestamp && (
+                            <span>{new Date(msg.timestamp).toLocaleString()}</span>
+                          )}
+                        </div>
+                        {msg.key && (
+                          <div>
+                            <div className="text-xs text-muted-foreground mb-1">Key:</div>
+                            <div className="bg-background p-2 rounded font-mono text-xs break-all">{msg.key}</div>
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-1">Value:</div>
+                          <div className="bg-background p-2 rounded font-mono text-xs break-all max-h-32 overflow-y-auto">
+                            {msg.value || '<null>'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {messagesLoaded && (!topicDetails.recentMessages || topicDetails.recentMessages.length === 0) && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No recent messages found. This topic may be empty or no producers are currently active.
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </ScrollArea>
