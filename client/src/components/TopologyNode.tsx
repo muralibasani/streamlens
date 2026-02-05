@@ -311,11 +311,22 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
     setShowAclDialog(true);
   };
 
+  const shapeClass = {
+    topic: "rounded-full",
+    producer: "rounded-md",
+    consumer: "rounded-3xl",
+    streams: "rounded-xl",
+    connector: "rounded-none node-shape-connector",
+    schema: "rounded-tl-2xl rounded-tr-lg rounded-br-xl rounded-bl-lg",
+    acl: "rounded-none node-shape-acl",
+  }[data.type as keyof typeof shapeClass] ?? "rounded-xl";
+
   return (
     <>
       <div 
         className={cn(
-          "min-w-[180px] px-4 py-3 rounded-xl bg-card border-2 transition-all duration-300 shadow-xl",
+          "min-w-[180px] px-4 py-3 bg-card border-2 transition-all duration-300 shadow-xl",
+          shapeClass,
           selected ? "border-primary ring-4 ring-primary/10" : "border-border",
           isHighlighted ? "border-primary shadow-[0_0_20px_hsl(var(--primary)/0.3)] scale-105" : "",
           isSearchMatch ? "ring-2 ring-yellow-500/50" : "",

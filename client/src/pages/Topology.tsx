@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/hooks/use-theme";
 import { Link } from "wouter";
 import {
   Popover,
@@ -63,8 +64,11 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
   const { data: health } = useClusterHealth(clusterId);
   const refreshTopology = useRefreshTopology();
   const { toast } = useToast();
+  const { theme } = useTheme();
   const reactFlowInstance = useReactFlow();
   const [, setLocation] = useLocation();
+
+  const backgroundGridColor = theme === "dark" ? "#4b5563" : "#94a3b8";
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -534,7 +538,7 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Graph Area */}
-        <div className="flex-1 relative bg-neutral-900/50">
+        <div className="flex-1 relative bg-neutral-100 dark:bg-neutral-900/50">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -545,7 +549,11 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
             fitView
             className="bg-dots-pattern"
           >
-            <Background color="#333" gap={20} size={1} />
+            <Background
+              color={backgroundGridColor}
+              gap={20}
+              size={1}
+            />
             <Controls className="!bg-card !border-border !fill-foreground" />
           </ReactFlow>
 

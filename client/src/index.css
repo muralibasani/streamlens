@@ -43,10 +43,14 @@
   --node-connector: 270 70% 55%;
   --node-schema: 215 85% 55%;
   --node-acl: 25 95% 45%;
+
+  --edge-stroke: 240 5% 35%;
 }
 
 /* Dark theme (when .dark is on html) */
 .dark {
+  --edge-stroke: 240 5% 65%;
+
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
 
@@ -112,6 +116,14 @@
   }
 }
 
+/* Topology node shapes by type (connector=hexagon, acl=shield) */
+.node-shape-connector {
+  clip-path: polygon(20% 0%, 80% 0%, 100% 50%, 80% 100%, 20% 100%, 0% 50%);
+}
+.node-shape-acl {
+  clip-path: polygon(0% 0%, 100% 0%, 100% 85%, 50% 100%, 0% 85%);
+}
+
 /* React Flow Customization */
 .react-flow__node {
   @apply rounded-xl border border-border shadow-lg transition-all duration-300;
@@ -122,8 +134,8 @@
 }
 
 .react-flow__edge-path {
-  stroke: hsl(var(--muted-foreground));
-  stroke-width: 1.5;
+  stroke: hsl(var(--edge-stroke));
+  stroke-width: 2;
 }
 
 .react-flow__controls {
