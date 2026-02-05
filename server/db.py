@@ -20,6 +20,15 @@ if not DATABASE_URL:
     db_path = Path(__file__).resolve().parent / "topology.db"
     DATABASE_URL = f"sqlite:///{db_path}"
 
+if DATABASE_URL.startswith("postgresql"):
+    try:
+        import psycopg2  # noqa: F401
+    except ImportError:
+        raise ImportError(
+            "PostgreSQL is configured (DATABASE_URL) but the driver is not installed. "
+            "Run: uv sync --extra postgres  (or: pip install psycopg2-binary)"
+        ) from None
+
 _is_sqlite = DATABASE_URL.startswith("sqlite")
 engine = create_engine(
     DATABASE_URL,

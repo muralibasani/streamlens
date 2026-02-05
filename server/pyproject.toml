@@ -24,6 +24,12 @@ dev = [
 postgres = [
     "psycopg2-binary>=2.9.0",
 ]
+gemini = [
+    "google-generativeai>=0.8.0",
+]
+anthropic = [
+    "anthropic>=0.22.0",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]

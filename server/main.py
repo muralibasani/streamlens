@@ -10,9 +10,10 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-# Load environment variables from .env.dev or .env file
-load_dotenv(".env.dev")  # Load .env.dev first (dev environment)
-load_dotenv()  # Then load .env if it exists (will not override existing vars)
+# Load environment variables from server directory so it works when run from project root
+_server_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_server_dir, ".env.dev"))
+load_dotenv(os.path.join(_server_dir, ".env"))
 
 from db import get_db, init_db
 from storage import (
