@@ -40,6 +40,13 @@ def build_topology(cluster_id: int, cluster: dict) -> dict:
                 topic_names.add(name)
                 nodes.append({"id": f"topic:{name}", "type": "topic", "data": {"label": name, "details": None}})
 
+    # Ensure topic nodes exist for topics that have ACLs
+    for a in state.get("acls", []):
+        name = a.get("topic")
+        if name and name not in topic_names:
+            topic_names.add(name)
+            nodes.append({"id": f"topic:{name}", "type": "topic", "data": {"label": name, "details": None}})
+
     for p in state["producers"]:
         source = p.get("source", "unknown")
         label = p.get("label") or p["id"]
@@ -141,6 +148,44 @@ def build_topology(cluster_id: int, cluster: dict) -> dict:
                 edges.append({"id": f"{topic}->{c['id']}", "source": f"topic:{topic}", "target": c["id"], "type": "sinks", "animated": True})
             else:
                 edges.append({"id": f"{c['id']}->{topic}", "source": c["id"], "target": f"topic:{topic}", "type": "sources", "animated": True})
+
+    # ACL nodes: one node per topic (grouped), edge from ACL node to topic; click shows list of bindings
+    topic_acls: dict[str, list[dict[str, Any]]] = {}
+    for a in state.get("acls", []):
+        topic = a.get("topic")
+        if not topic:
+            continue
+        if topic not in topic_acls:
+            topic_acls[topic] = []
+        topic_acls[topic].append({
+            "principal": a.get("principal", "") or "",
+            "host": a.get("host", "") or "",
+            "operation": a.get("operation", "") or "?",
+            "permissionType": a.get("permissionType", "") or "?",
+        })
+    for topic, acl_list in topic_acls.items():
+        if not acl_list:
+            continue
+        acl_id = f"acl:topic:{topic}"
+        count = len(acl_list)
+        label = f"ACL ({count})" if count > 1 else "ACL"
+        nodes.append({
+            "id": acl_id,
+            "type": "acl",
+            "data": {
+                "label": label,
+                "topic": topic,
+                "acls": acl_list,
+            },
+        })
+        edges.append({
+            "id": f"{acl_id}->topic:{topic}",
+            "source": acl_id,
+            "target": f"topic:{topic}",
+            "type": "acl",
+            "animated": False,
+            "style": {"strokeDasharray": "5,5", "stroke": "#b45309"},
+        })
 
     # Create schema nodes and link them to topics
     for s in state["schemas"]:

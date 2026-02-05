@@ -70,6 +70,7 @@ class KafkaService:
             "streams": [],
             "connectors": [],
             "schemas": [],
+            "acls": [],
         }
 
         try:
@@ -81,7 +82,7 @@ class KafkaService:
             
             # Producers: Try multiple sources
             producers = []
-            
+
             # Source 1: JMX metrics (real-time active producers)
             jmx_host = cluster.get("jmxHost")
             jmx_port = cluster.get("jmxPort")
@@ -95,6 +96,10 @@ class KafkaService:
             
             state["producers"] = producers
             logger.info("Topology state: %d producers (will appear in UI after Sync)", len(producers))
+            
+            # Topic ACLs: bindings for TOPIC resource (for ACL nodes in topology)
+            topic_names_for_acl = [t["name"] for t in state["topics"] if not (t.get("name") or "").startswith("__")]
+            state["acls"] = self._fetch_topic_acls(admin, topic_names_for_acl)
             
             # Load configured Kafka Streams applications (from streams.yaml)
             state["streams"] = self._load_streams_config()
@@ -129,6 +134,7 @@ class KafkaService:
             "streams": [],
             "connectors": [],
             "schemas": [],
+            "acls": [],
         }
 
     def _fetch_topics(self, admin: AdminClient) -> list[dict[str, Any]]:
@@ -495,6 +501,106 @@ class KafkaService:
             logger.debug("ACL fetch failed (ACLs might not be enabled): %s", e)
         
         return producers
+
+    def _fetch_topic_acls(self, admin: AdminClient, topic_names: list[str] | None = None) -> list[dict[str, Any]]:
+        """
+        Fetch all ACL bindings for TOPIC resources (for ACL nodes in topology).
+        Returns list of dicts: topic, principal, host, operation, permissionType.
+        Tries filter with name=None first; if that fails or returns nothing, queries per topic.
+        """
+        acls: list[dict[str, Any]] = []
+        topic_names = topic_names or []
+
+        def parse_binding(acl: Any) -> dict[str, Any] | None:
+            topic = getattr(acl, "name", None) or getattr(acl, "resource_name", None)
+            if not topic or (isinstance(topic, str) and topic.startswith("__")):
+                return None
+            principal = getattr(acl, "principal", "") or ""
+            host = getattr(acl, "host", "") or ""
+            op = getattr(acl, "operation", None)
+            perm = getattr(acl, "permission_type", None)
+            operation = op.name if hasattr(op, "name") else str(op) if op else "UNKNOWN"
+            permission_type = perm.name if hasattr(perm, "name") else str(perm) if perm else "UNKNOWN"
+            return {
+                "topic": topic,
+                "principal": principal,
+                "host": host,
+                "operation": operation,
+                "permissionType": permission_type,
+            }
+
+        try:
+            from confluent_kafka.admin import (
+                AclBindingFilter,
+                ResourceType,
+                ResourcePatternType,
+                AclOperation,
+                AclPermissionType,
+            )
+
+            # Strategy 1: filter with name=None (match any topic) if the API allows it
+            try:
+                acl_filter = AclBindingFilter(
+                    restype=ResourceType.TOPIC,
+                    name=None,
+                    resource_pattern_type=ResourcePatternType.ANY,
+                    principal=None,
+                    host=None,
+                    operation=AclOperation.ANY,
+                    permission_type=AclPermissionType.ANY,
+                )
+                result = admin.describe_acls(acl_filter, request_timeout=10)
+                bindings = result.result()
+                for acl in bindings:
+                    parsed = parse_binding(acl)
+                    if parsed:
+                        acls.append(parsed)
+                if acls:
+                    logger.info("Found %d topic ACL bindings (match-any filter)", len(acls))
+                    return acls
+            except (TypeError, ValueError) as e:
+                logger.debug("Match-any ACL filter not supported (%s), trying per-topic", e)
+
+            # Strategy 2: describe ACLs per topic (works when filter with None is rejected or returns nothing)
+            if not topic_names:
+                try:
+                    metadata = admin.list_topics(timeout=5)
+                    if getattr(metadata, "topics", None):
+                        topic_names = [n for n in metadata.topics.keys() if n and not n.startswith("__")]
+                except Exception as e:
+                    logger.debug("list_topics for ACL fallback: %s", e)
+            seen: set[tuple[str, str, str, str, str]] = set()
+            for topic in topic_names:
+                if not topic or topic.startswith("__"):
+                    continue
+                try:
+                    acl_filter = AclBindingFilter(
+                        restype=ResourceType.TOPIC,
+                        name=topic,
+                        resource_pattern_type=ResourcePatternType.LITERAL,
+                        principal=None,
+                        host=None,
+                        operation=AclOperation.ANY,
+                        permission_type=AclPermissionType.ANY,
+                    )
+                    result = admin.describe_acls(acl_filter, request_timeout=5)
+                    bindings = result.result()
+                    for acl in bindings:
+                        parsed = parse_binding(acl)
+                        if parsed:
+                            key = (parsed["topic"], parsed["principal"], parsed["host"], parsed["operation"], parsed["permissionType"])
+                            if key not in seen:
+                                seen.add(key)
+                                acls.append(parsed)
+                except Exception as e:
+                    logger.debug("ACL describe for topic %s: %s", topic, e)
+            if acls:
+                logger.info("Found %d topic ACL bindings (per-topic)", len(acls))
+        except ImportError as e:
+            logger.debug("ACL classes not available in confluent-kafka version: %s", e)
+        except Exception as e:
+            logger.warning("Topic ACL fetch failed: %s", e)
+        return acls
 
     def fetch_connector_details(self, connect_url: str, connector_name: str) -> dict[str, Any]:
         """

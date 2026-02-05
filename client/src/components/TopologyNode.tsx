@@ -49,6 +49,7 @@ const NodeIcon = ({ type }: { type: string }) => {
     case 'streams': return <GitBranch className="w-5 h-5 text-[hsl(var(--node-streams))]" />;
     case 'connector': return <ArrowRightLeft className="w-5 h-5 text-[hsl(var(--node-connector))]" />;
     case 'schema': return <FileJson className="w-5 h-5 text-[hsl(var(--node-schema))]" />;
+    case 'acl': return <Shield className="w-5 h-5 text-[hsl(var(--node-acl))]" />;
     default: return <Box className="w-5 h-5 text-muted-foreground" />;
   }
 };
@@ -61,6 +62,7 @@ const NodeLabel = ({ type }: { type: string }) => {
     case 'streams': return <span className="text-[10px] uppercase font-bold text-[hsl(var(--node-streams))] tracking-wider">Streams</span>;
     case 'connector': return <span className="text-[10px] uppercase font-bold text-[hsl(var(--node-connector))] tracking-wider">Connector</span>;
     case 'schema': return <span className="text-[10px] uppercase font-bold text-[hsl(var(--node-schema))] tracking-wider">Schema</span>;
+    case 'acl': return <span className="text-[10px] uppercase font-bold text-[hsl(var(--node-acl))] tracking-wider">ACL</span>;
     default: return null;
   }
 };
@@ -126,6 +128,8 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
   
   const [showTopicDialog, setShowTopicDialog] = useState(false);
   const [topicDetails, setTopicDetails] = useState<any>(null);
+
+  const [showAclDialog, setShowAclDialog] = useState(false);
   const [isLoadingTopic, setIsLoadingTopic] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
@@ -249,6 +253,11 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
     }
   };
 
+  const handleAclClick = () => {
+    if (data.type !== 'acl') return;
+    setShowAclDialog(true);
+  };
+
   return (
     <>
       <div 
@@ -261,13 +270,15 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
           data.type === 'topic' && "cursor-pointer hover:border-purple-500 hover:shadow-purple-500/20",
           data.type === 'schema' && "cursor-pointer hover:border-blue-500 hover:shadow-blue-500/20",
           data.type === 'consumer' && "cursor-pointer hover:border-green-500 hover:shadow-green-500/20",
-          data.type === 'connector' && "cursor-pointer hover:border-orange-500 hover:shadow-orange-500/20"
+          data.type === 'connector' && "cursor-pointer hover:border-orange-500 hover:shadow-orange-500/20",
+          data.type === 'acl' && "cursor-pointer hover:border-amber-500/50 hover:shadow-amber-500/20 border-amber-500/40"
         )}
         onClick={
           data.type === 'topic' ? handleTopicClick : 
           data.type === 'schema' ? handleSchemaClick : 
           data.type === 'consumer' ? handleConsumerClick : 
           data.type === 'connector' ? handleConnectorClick :
+          data.type === 'acl' ? handleAclClick :
           undefined
         }
       >
@@ -306,6 +317,12 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
                   {data.details && (
                     <p className="text-xs text-muted-foreground mt-1">
                       {data.type === 'topic' && `Partitions: ${data.details.partitions || 'N/A'}`}
+                    </p>
+                  )}
+                  {data.type === 'acl' && data.topic && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Topic: {data.topic}
+                      {Array.isArray(data.acls) && data.acls.length > 0 && ` · ${data.acls.length} binding(s)`}
                     </p>
                   )}
                 </TooltipContent>
@@ -425,6 +442,51 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
                 </div>
               </div>
             )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+
+    {/* ACL Details Dialog */}
+    <Dialog open={showAclDialog} onOpenChange={setShowAclDialog}>
+      <DialogContent className="max-w-2xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-[hsl(var(--node-acl))]" />
+            ACL: {data.topic || 'Topic'}
+          </DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[60vh] pr-4">
+          {Array.isArray(data.acls) && data.acls.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {data.acls.length} binding(s) for topic <span className="font-mono font-medium text-foreground">{data.topic}</span>
+              </p>
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th className="text-left py-2 px-3 font-semibold">Principal</th>
+                      <th className="text-left py-2 px-3 font-semibold">Host</th>
+                      <th className="text-left py-2 px-3 font-semibold">Operation</th>
+                      <th className="text-left py-2 px-3 font-semibold">Permission</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.acls.map((acl: { principal?: string; host?: string; operation?: string; permissionType?: string }, i: number) => (
+                      <tr key={i} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 px-3 font-mono text-xs">{acl.principal ?? '—'}</td>
+                        <td className="py-2 px-3 font-mono text-xs">{acl.host ?? '—'}</td>
+                        <td className="py-2 px-3">{acl.operation ?? '—'}</td>
+                        <td className="py-2 px-3">{acl.permissionType ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No ACL bindings.</p>
+          )}
         </ScrollArea>
       </DialogContent>
     </Dialog>

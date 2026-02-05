@@ -93,8 +93,9 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
     const consumers = nodes.filter(n => n.data?.type === 'consumer' || n.id?.startsWith('group:')).length;
     const streams = nodes.filter(n => n.data?.type === 'streams').length;
     const connectors = nodes.filter(n => n.data?.type === 'connector' || n.id?.startsWith('connect:')).length;
+    const acls = nodes.filter(n => n.data?.type === 'acl' || n.id?.startsWith('acl:topic:')).length;
     
-    return { topics, schemas, producers, consumers, streams, connectors };
+    return { topics, schemas, producers, consumers, streams, connectors, acls };
   }, [nodes]);
 
   // Transform snapshot data into ReactFlow elements
@@ -561,6 +562,13 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                   <span className="text-muted-foreground">Consumer Groups</span>
                 </div>
                 <span className="font-bold text-foreground">{entityCounts.consumers}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-3 h-3 text-[hsl(var(--node-acl))]" />
+                  <span className="text-muted-foreground">ACLs</span>
+                </div>
+                <span className="font-bold text-foreground">{entityCounts.acls}</span>
               </div>
               {entityCounts.streams > 0 && (
                 <div className="flex items-center justify-between text-sm">

@@ -44,6 +44,7 @@
   --node-streams: 185 70% 45%;   /* Teal */
   --node-connector: 270 70% 60%;/* Purple */
   --node-schema: 215 85% 65%;   /* Blue (Schema Registry) */
+  --node-acl: 25 95% 53%;      /* Amber (ACL / Shield) */
 }
 
 /* Animated dashed line for Kafka Streams edges */

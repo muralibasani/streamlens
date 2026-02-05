@@ -30,7 +30,8 @@ Important:
 - For questions about "topics produced by X", include the producer/app node ID and all relevant topic node IDs
 - For questions about schemas, include schema node IDs (format: "schema:subject-name") and their linked topic nodes
 - For questions about connectors, include connector node IDs (format: "connect:connector-name") and their linked topic nodes
-- Always include the full node ID as it appears in the graph (e.g., "topic:testtopic", "group:mygroup", "jmx:active-producer:testtopic", "schema:orders-value", "connect:file-source")
+- For questions about ACLs on a topic, include ACL node IDs (format: "acl:topic:topicname") and the topic node
+- Always include the full node ID as it appears in the graph (e.g., "topic:testtopic", "group:mygroup", "jmx:active-producer:testtopic", "schema:orders-value", "connect:file-source", "acl:topic:transactions-topic")
 
 Output format (JSON only):
 {{
