@@ -1,15 +1,14 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertClusterSchema, type InsertCluster } from "@/lib/api";
-import { useCreateCluster } from "@/hooks/use-kafka";
+import { useUpdateCluster } from "@/hooks/use-kafka";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
@@ -22,61 +21,82 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, Server } from "lucide-react";
+import { Server } from "lucide-react";
 
-export function CreateClusterDialog() {
-  const [open, setOpen] = useState(false);
+interface EditClusterDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  cluster: {
+    id: number;
+    name: string;
+    bootstrapServers: string;
+    schemaRegistryUrl?: string | null;
+    connectUrl?: string | null;
+    jmxHost?: string | null;
+    jmxPort?: number | null;
+  };
+}
+
+export function EditClusterDialog({ open, onOpenChange, cluster }: EditClusterDialogProps) {
   const { toast } = useToast();
-  const createCluster = useCreateCluster();
+  const updateCluster = useUpdateCluster();
 
   const form = useForm<InsertCluster>({
     resolver: zodResolver(insertClusterSchema),
     defaultValues: {
-      name: "",
-      bootstrapServers: "",
-      schemaRegistryUrl: "",
-      connectUrl: "",
-      jmxHost: "",
-      jmxPort: undefined as number | undefined,
+      name: cluster.name,
+      bootstrapServers: cluster.bootstrapServers,
+      schemaRegistryUrl: cluster.schemaRegistryUrl || "",
+      connectUrl: cluster.connectUrl || "",
+      jmxHost: cluster.jmxHost || "",
+      jmxPort: cluster.jmxPort ?? undefined,
     },
   });
 
-  const onSubmit = (data: InsertCluster) => {
-    createCluster.mutate(data, {
-      onSuccess: () => {
-        setOpen(false);
-        form.reset();
-        toast({
-          title: "Success",
-          description: "Cluster added successfully",
-        });
-      },
-      onError: (error) => {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
-      },
+  // Update form values when cluster prop changes
+  useEffect(() => {
+    form.reset({
+      name: cluster.name,
+      bootstrapServers: cluster.bootstrapServers,
+      schemaRegistryUrl: cluster.schemaRegistryUrl || "",
+      connectUrl: cluster.connectUrl || "",
+      jmxHost: cluster.jmxHost || "",
+      jmxPort: cluster.jmxPort ?? undefined,
     });
+  }, [cluster, form]);
+
+  const onSubmit = (data: InsertCluster) => {
+    updateCluster.mutate(
+      { id: cluster.id, data },
+      {
+        onSuccess: () => {
+          onOpenChange(false);
+          toast({
+            title: "Success",
+            description: "Cluster updated successfully",
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: "Error",
+            description: error.message,
+            variant: "destructive",
+          });
+        },
+      }
+    );
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20">
-          <Plus className="w-4 h-4" />
-          Add Cluster
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px] bg-card border-border">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Server className="w-5 h-5 text-primary" />
-            Add Kafka Cluster
+            Edit Kafka Cluster
           </DialogTitle>
           <DialogDescription>
-            Enter your cluster connection details to visualize the topology.
+            Update your cluster connection details.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -101,7 +121,7 @@ export function CreateClusterDialog() {
                 <FormItem>
                   <FormLabel>Bootstrap Servers</FormLabel>
                   <FormControl>
-                    <Input placeholder="pkc-12345.us-west-2.aws.confluent.cloud:9092" {...field} />
+                    <Input placeholder="localhost:9092" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -114,7 +134,7 @@ export function CreateClusterDialog() {
                 <FormItem>
                   <FormLabel>Schema Registry URL (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="https://..." value={field.value || ''} onChange={field.onChange} />
+                    <Input placeholder="http://localhost:8081" value={field.value || ''} onChange={field.onChange} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -172,15 +192,15 @@ export function CreateClusterDialog() {
               )}
             />
             <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button 
                 type="submit" 
-                disabled={createCluster.isPending}
+                disabled={updateCluster.isPending}
                 className="bg-primary hover:bg-primary/90"
               >
-                {createCluster.isPending ? "Connecting..." : "Add Cluster"}
+                {updateCluster.isPending ? "Updating..." : "Update Cluster"}
               </Button>
             </div>
           </form>

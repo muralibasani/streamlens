@@ -1,53 +1,13 @@
 from .kafka import kafka_service
 
 
-def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | None = None) -> dict:
-    """Build topology graph from real cluster state and optional app registrations."""
+def build_topology(cluster_id: int, cluster: dict) -> dict:
+    """Build topology graph from real cluster state."""
     try:
         state = kafka_service.fetch_system_state(cluster)
     except Exception:
-        # Kafka unreachable or any error: still build from registrations (streams, producers, consumers)
         state = kafka_service._empty_state()
-    
-    # Merge manual registrations (user-provided metadata)
-    # Auto-discovered consumers are already in state["consumers"] from fetch_system_state
-    # Auto-discovered producers (from ACLs) are already in state["producers"]
-    for reg in registrations or []:
-        app_name = reg.get("appName") or reg.get("app_name", "")
-        role = (reg.get("role") or "producer").lower()
-        topics = reg.get("topics") or []
-        output_topics = reg.get("outputTopics") or reg.get("output_topics") or []
-        if not app_name:
-            continue
-        node_id = f"app:{app_name}"
-        if role == "streams":
-            in_list = list(topics) if topics else []
-            out_list = list(output_topics) if output_topics else []
-            if not in_list and not out_list:
-                continue
-            state["streams"].append({
-                "id": node_id,
-                "label": app_name,
-                "consumesFrom": in_list,
-                "producesTo": out_list,
-                "source": "manual",  # Manual registration
-            })
-        elif role == "producer":
-            if not topics:
-                continue
-            state["producers"].append({
-                "id": node_id,
-                "producesTo": topics,
-                "source": "manual",  # Manual registration
-            })
-        else:  # consumer
-            if not topics:
-                continue
-            state["consumers"].append({
-                "id": node_id,
-                "consumesFrom": topics,
-                "source": "manual",  # Manual registration
-            })
+
     nodes = []
     edges = []
 
@@ -61,7 +21,7 @@ def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | N
         nodes.append({"id": f"topic:{t['name']}", "type": "topic", "data": topic_data})
 
     # Ensure topic nodes exist for topics referenced by streams, producers, and consumers
-    # This handles cases where topics appear in registrations/JMX/ACLs but not in broker metadata
+    # This handles cases where topics appear in JMX/ACLs/connectors but not in broker metadata
     for s in state["streams"]:
         for name in s["consumesFrom"] + s["producesTo"]:
             if name not in topic_names:
@@ -79,6 +39,13 @@ def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | N
             if name not in topic_names:
                 topic_names.add(name)
                 nodes.append({"id": f"topic:{name}", "type": "topic", "data": {"label": name, "details": None}})
+
+    # Ensure topic nodes exist for topics that have ACLs
+    for a in state.get("acls", []):
+        name = a.get("topic")
+        if name and name not in topic_names:
+            topic_names.add(name)
+            nodes.append({"id": f"topic:{name}", "type": "topic", "data": {"label": name, "details": None}})
 
     for p in state["producers"]:
         source = p.get("source", "unknown")
@@ -172,13 +139,53 @@ def build_topology(cluster_id: int, cluster: dict, registrations: list[dict] | N
     for c in state["connectors"]:
         if c["id"] not in connector_nodes_added:
             connector_nodes_added.add(c["id"])
-            nodes.append({"id": c["id"], "type": "connector", "data": {"label": c["id"], "type": c["type"]}})
+            # Clean up label: remove "connect:" prefix for display
+            connector_label = c["id"].replace("connect:", "", 1) if c["id"].startswith("connect:") else c["id"]
+            nodes.append({"id": c["id"], "type": "connector", "data": {"label": connector_label, "type": c["type"]}})
         topic = c.get("topic") or "?"
         if topic != "?":
             if c["type"] == "sink":
                 edges.append({"id": f"{topic}->{c['id']}", "source": f"topic:{topic}", "target": c["id"], "type": "sinks", "animated": True})
             else:
                 edges.append({"id": f"{c['id']}->{topic}", "source": c["id"], "target": f"topic:{topic}", "type": "sources", "animated": True})
+
+    # ACL nodes: one node per topic (grouped), edge from ACL node to topic; click shows list of bindings
+    topic_acls: dict[str, list[dict[str, Any]]] = {}
+    for a in state.get("acls", []):
+        topic = a.get("topic")
+        if not topic:
+            continue
+        if topic not in topic_acls:
+            topic_acls[topic] = []
+        topic_acls[topic].append({
+            "principal": a.get("principal", "") or "",
+            "host": a.get("host", "") or "",
+            "operation": a.get("operation", "") or "?",
+            "permissionType": a.get("permissionType", "") or "?",
+        })
+    for topic, acl_list in topic_acls.items():
+        if not acl_list:
+            continue
+        acl_id = f"acl:topic:{topic}"
+        count = len(acl_list)
+        label = f"ACL ({count})" if count > 1 else "ACL"
+        nodes.append({
+            "id": acl_id,
+            "type": "acl",
+            "data": {
+                "label": label,
+                "topic": topic,
+                "acls": acl_list,
+            },
+        })
+        edges.append({
+            "id": f"{acl_id}->topic:{topic}",
+            "source": acl_id,
+            "target": f"topic:{topic}",
+            "type": "acl",
+            "animated": False,
+            "style": {"strokeDasharray": "5,5", "stroke": "#b45309"},
+        })
 
     # Create schema nodes and link them to topics
     for s in state["schemas"]:

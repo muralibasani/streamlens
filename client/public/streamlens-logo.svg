@@ -1,0 +1,106 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient definitions -->
+  <defs>
+    <linearGradient id="streamGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#F7931E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFC857;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="lensGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#50C9E9;stop-opacity:0.9" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background circle (lens) -->
+  <circle cx="100" cy="100" r="85" fill="url(#lensGradient)" opacity="0.15"/>
+  
+  <!-- Stream lines (flowing data) -->
+  <g fill="none" stroke="url(#streamGradient)" stroke-width="4" stroke-linecap="round" filter="url(#glow)">
+    <!-- Top stream -->
+    <path d="M 30 70 Q 70 65, 100 70 T 170 70" opacity="0.9">
+      <animate attributeName="d" 
+               values="M 30 70 Q 70 65, 100 70 T 170 70;
+                       M 30 70 Q 70 75, 100 70 T 170 70;
+                       M 30 70 Q 70 65, 100 70 T 170 70"
+               dur="3s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- Middle stream -->
+    <path d="M 20 100 Q 60 95, 100 100 T 180 100" opacity="1">
+      <animate attributeName="d" 
+               values="M 20 100 Q 60 95, 100 100 T 180 100;
+                       M 20 100 Q 60 105, 100 100 T 180 100;
+                       M 20 100 Q 60 95, 100 100 T 180 100"
+               dur="2.5s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- Bottom stream -->
+    <path d="M 30 130 Q 70 135, 100 130 T 170 130" opacity="0.9">
+      <animate attributeName="d" 
+               values="M 30 130 Q 70 135, 100 130 T 170 130;
+                       M 30 130 Q 70 125, 100 130 T 170 130;
+                       M 30 130 Q 70 135, 100 130 T 170 130"
+               dur="3.5s" repeatCount="indefinite"/>
+    </path>
+  </g>
+  
+  <!-- Data nodes (circles along streams) -->
+  <g fill="url(#streamGradient)">
+    <!-- Node 1 -->
+    <circle cx="40" cy="100" r="5">
+      <animate attributeName="cx" 
+               values="40;180;40" 
+               dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" 
+               values="0;1;1;0" 
+               dur="4s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Node 2 -->
+    <circle cx="80" cy="70" r="4">
+      <animate attributeName="cx" 
+               values="80;170;80" 
+               dur="5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" 
+               values="0;1;1;0" 
+               dur="5s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Node 3 -->
+    <circle cx="60" cy="130" r="4">
+      <animate attributeName="cx" 
+               values="60;160;60" 
+               dur="4.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" 
+               values="0;1;1;0" 
+               dur="4.5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Lens/Focus ring -->
+  <circle cx="100" cy="100" r="70" fill="none" stroke="url(#lensGradient)" stroke-width="3" opacity="0.4"/>
+  <circle cx="100" cy="100" r="75" fill="none" stroke="url(#lensGradient)" stroke-width="1.5" opacity="0.2"/>
+  
+  <!-- Center focal point -->
+  <circle cx="100" cy="100" r="8" fill="url(#streamGradient)" opacity="0.8">
+    <animate attributeName="r" 
+             values="8;10;8" 
+             dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="100" cy="100" r="12" fill="none" stroke="url(#streamGradient)" stroke-width="2" opacity="0.5">
+    <animate attributeName="r" 
+             values="12;16;12" 
+             dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" 
+             values="0.5;0.2;0.5" 
+             dur="2s" repeatCount="indefinite"/>
+  </circle>
+</svg>

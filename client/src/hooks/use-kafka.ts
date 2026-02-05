@@ -39,6 +39,21 @@ export function useCluster(id: number) {
   });
 }
 
+export function useClusterHealth(id: number) {
+  return useQuery({
+    queryKey: [api.clusters.health.path, id],
+    queryFn: async () => {
+      const url = `${API_BASE}${buildUrl(api.clusters.health.path, { id })}`;
+      const res = await fetch(url);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("Failed to check cluster health");
+      return api.clusters.health.responses[200].parse(await res.json());
+    },
+    retry: 1,
+    refetchInterval: 30000, // Check every 30 seconds
+  });
+}
+
 export function useCreateCluster() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -58,6 +73,29 @@ export function useCreateCluster() {
       return api.clusters.create.responses[201].parse(await res.json());
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [api.clusters.list.path] }),
+  });
+}
+
+export function useUpdateCluster() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: InsertCluster }) => {
+      const url = `${API_BASE}${buildUrl(api.clusters.update.path, { id })}`;
+      const res = await fetch(url, {
+        method: api.clusters.update.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.status === 404) throw new Error("Cluster not found");
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to update cluster" }));
+        throw new Error(error.message || "Failed to update cluster");
+      }
+      return api.clusters.update.responses[200].parse(await res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.clusters.list.path] });
+    },
   });
 }
 
@@ -106,64 +144,6 @@ export function useRefreshTopology() {
     },
     onSuccess: (snapshot, clusterId) => {
       queryClient.setQueryData([api.topology.get.path, clusterId], snapshot);
-    },
-  });
-}
-
-// ============================================
-// REGISTRATIONS (optional producers/consumers, no interceptors)
-// ============================================
-
-export type Registration = { id?: number; clusterId?: number; appName: string; role: string; topics: string[]; outputTopics?: string[] };
-
-export function useRegistrations(clusterId: number) {
-  return useQuery({
-    queryKey: [api.registrations.list.path, clusterId],
-    queryFn: async () => {
-      const url = `${API_BASE}${buildUrl(api.registrations.list.path, { id: clusterId })}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch registrations");
-      return (await res.json()) as Registration[];
-    },
-  });
-}
-
-export function useUpsertRegistration(clusterId: number) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (data: { appName: string; role: string; topics: string[]; outputTopics?: string[] }) => {
-      const url = `${API_BASE}${buildUrl(api.registrations.upsert.path, { id: clusterId })}`;
-      const body: Record<string, unknown> = { appName: data.appName, role: data.role, topics: data.topics };
-      if (data.outputTopics != null) body.outputTopics = data.outputTopics;
-      const res = await fetch(url, {
-        method: api.registrations.upsert.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error("Failed to register app");
-      return (await res.json()) as { appName: string; role: string; topics: string[] };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [api.registrations.list.path, clusterId] });
-      // Do NOT invalidate topology here: it would trigger GET /topology which returns
-      // the old cached snapshot and overwrites the cache. Caller must trigger refresh
-      // and refresh's onSuccess will setQueryData with the new snapshot.
-    },
-  });
-}
-
-export function useDeleteRegistration(clusterId: number) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (appName: string) => {
-      const path = buildUrl(api.registrations.delete.path, { id: clusterId, appName: encodeURIComponent(appName) });
-      const url = `${API_BASE}${path}`;
-      const res = await fetch(url, { method: api.registrations.delete.method });
-      if (!res.ok) throw new Error("Failed to remove registration");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [api.registrations.list.path, clusterId] });
-      // Do NOT invalidate topology; caller triggers refresh which setQueryData.
     },
   });
 }

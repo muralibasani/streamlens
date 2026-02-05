@@ -9,6 +9,15 @@ export const insertClusterSchema = z.object({
   bootstrapServers: z.string().min(1, "Bootstrap servers are required"),
   schemaRegistryUrl: z.string().optional(),
   connectUrl: z.string().optional(),
+  jmxHost: z.string().optional(),
+  jmxPort: z.preprocess(
+    (v) => {
+      if (v === "" || v === undefined || (typeof v === "number" && Number.isNaN(v))) return undefined;
+      const n = Number(v);
+      return Number.isNaN(n) ? undefined : n;
+    },
+    z.number().int().positive().optional()
+  ),
 });
 
 export type InsertCluster = z.infer<typeof insertClusterSchema>;
@@ -20,6 +29,8 @@ const clusterSchema = z.object({
   bootstrapServers: z.string(),
   schemaRegistryUrl: z.string().nullable(),
   connectUrl: z.string().nullable(),
+  jmxHost: z.string().nullable().optional(),
+  jmxPort: z.number().nullable().optional(),
   createdAt: z.string().optional(),
 });
 
@@ -61,6 +72,19 @@ export const api = {
         404: z.object({ message: z.string() }),
       },
     },
+    health: {
+      method: "GET" as const,
+      path: "/api/clusters/:id/health",
+      responses: {
+        200: z.object({
+          clusterId: z.number(),
+          online: z.boolean(),
+          error: z.string().nullable(),
+          clusterMode: z.enum(["kraft", "zookeeper"]).nullable().optional(),
+        }),
+        404: z.object({ message: z.string() }),
+      },
+    },
     create: {
       method: "POST" as const,
       path: "/api/clusters",
@@ -68,6 +92,15 @@ export const api = {
       responses: {
         201: clusterSchema,
         400: validationErrorSchema,
+      },
+    },
+    update: {
+      method: "PUT" as const,
+      path: "/api/clusters/:id",
+      input: insertClusterSchema,
+      responses: {
+        200: clusterSchema,
+        404: z.object({ message: z.string() }),
       },
     },
     delete: {
@@ -109,11 +142,6 @@ export const api = {
         200: aiQueryResponseSchema,
       },
     },
-  },
-  registrations: {
-    list: { path: "/api/clusters/:id/registrations" },
-    upsert: { method: "POST" as const, path: "/api/clusters/:id/registrations" },
-    delete: { method: "DELETE" as const, path: "/api/clusters/:id/registrations/:appName" },
   },
 };
 

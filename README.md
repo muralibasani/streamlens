@@ -13,15 +13,21 @@ A full-stack app for visualizing Kafka topologies (topics, producers, consumers,
 
 ```bash
 cd server
-uv sync   # or: pip install -e .
+uv sync 
+# First time only: install dependencies
+uv pip install -e .
+
+# Start backend server (every time)
 uv run uvicorn main:app --reload --port 5000
 ```
+
+> ⚠️ **Important**: Always use `uv run` to start the backend and run Python scripts. This ensures the correct environment with all dependencies is used.
 
 **Frontend**
 
 ```bash
 cd client
-npm install
+npm install  # First time only
 npm run dev
 ```
 
@@ -68,7 +74,7 @@ This makes StreamLens safe to use in production environments for monitoring and 
 - **server**: `DATABASE_URL` (optional; default: SQLite at `server/topology.db`; use `postgresql://...` and `uv sync --extra postgres` to switch to PostgreSQL). Optional: `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL` for AI query.
 - **client**: `VITE_API_URL` (optional, default `http://localhost:5000` for proxy target).
 
-## Topology: Auto-Discovery & Manual Registration
+## Topology: Auto-Discovery
 
 ### Auto-Discovered Entities (Real-Time, No Client Changes)
 
@@ -104,7 +110,7 @@ See [`docs/STREAMS_CONFIG.md`](docs/STREAMS_CONFIG.md) for full documentation.
 
 ### Visual Indicators
 
-- **🌟 Live** (Green badge) — Consumers auto-discovered from Kafka consumer groups in real-time
+- **🌟 Live** (Green badge) — Consumers auto-discovered from Kafka consumer groups in real-time. **Click consumer nodes** to view lag per partition.
 - **⚡ JMX** (Yellow badge) — Active producers detected from JMX metrics (topics receiving messages NOW)
 - **📄 Schema Nodes** — Topics with registered schemas show small linked schema nodes. **Click the schema node** to view the full schema definition in a dialog.
 
@@ -134,13 +140,57 @@ Example questions:
 
 ## JMX Producer Auto-Discovery (Optional)
 
-Enable JMX on your Kafka brokers to see real-time active producers. See **[docs/JMX_SETUP.md](docs/JMX_SETUP.md)** for complete setup guide.
+Enable JMX on your Kafka brokers to see real-time active producers (⚡ JMX badge).
 
-**Quick Start:**
+### One-Time Setup
+
+**1. Enable JMX on Kafka broker** (required every time Kafka starts):
 ```bash
-# 1. Enable JMX on Kafka broker
+# Before starting Kafka, set JMX_PORT
 export JMX_PORT=9999
-./bin/kafka-server-start.sh config/server.properties
+kafka-server-start.sh config/server.properties
 
-
+# For Docker, add to your docker-compose.yml:
+# environment:
+#   JMX_PORT: 9999
 ```
+
+**2. Configure JMX in StreamLens** (only needed ONCE per cluster - stored in database):
+```bash
+cd server
+uv run python3 debug/configure_jmx.py 1 localhost 9999
+# Replace '1' with your cluster ID (shown in the script output)
+```
+
+**3. Restart backend and sync:**
+```bash
+cd server
+uv run uvicorn main:app --reload --port 5000
+```
+
+Then click **"Sync"** button in the UI topology view.
+
+### Daily Usage
+
+After the one-time setup above, you only need:
+```bash
+# 1. Start Kafka with JMX (every time)
+export JMX_PORT=9999
+kafka-server-start.sh config/server.properties
+
+# 2. Start StreamLens backend (every time)
+cd server
+uv run uvicorn main:app --reload --port 5000
+```
+
+JMX configuration is saved in the database - no need to run `configure_jmx.py` again!
+
+### Troubleshooting
+
+**Test if JMX is working:**
+```bash
+cd server
+uv run python3 debug/test_jmx_connection.py
+```
+
+See **[docs/JMX_SETUP.md](docs/JMX_SETUP.md)** for detailed troubleshooting.

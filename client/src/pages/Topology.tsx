@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import ReactFlow, {
   Background,
   Controls,
@@ -10,13 +10,13 @@ import ReactFlow, {
   useReactFlow,
 } from "reactflow";
 import dagre from "dagre";
-import { useTopology, useRefreshTopology, useCluster } from "@/hooks/use-kafka";
+import { useTopology, useRefreshTopology, useCluster, useClusterHealth } from "@/hooks/use-kafka";
 import TopologyNode from "@/components/TopologyNode";
 import { StreamsEdge } from "@/components/StreamsEdge";
 import { AiChatPanel } from "@/components/AiChatPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson } from "lucide-react";
+import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import {
@@ -59,15 +59,31 @@ const edgeTypes = {
 function TopologyContent({ clusterId }: { clusterId: number }) {
   const { data: snapshot, isLoading, refetch } = useTopology(clusterId);
   const { data: cluster } = useCluster(clusterId);
+  const { data: health } = useClusterHealth(clusterId);
   const refreshTopology = useRefreshTopology();
   const { toast } = useToast();
   const reactFlowInstance = useReactFlow();
+  const [, setLocation] = useLocation();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [matchingNodes, setMatchingNodes] = useState<string[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+
+  // Redirect to homepage if cluster is offline
+  useEffect(() => {
+    if (health && health.online === false) {
+      toast({
+        title: "Cluster Offline",
+        description: "Cannot access topology - cluster is unreachable. Redirecting to home...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        setLocation("/");
+      }, 2000); // Give user time to see the message
+    }
+  }, [health, setLocation, toast]);
 
   // Calculate entity counts
   const entityCounts = useMemo(() => {
@@ -76,8 +92,10 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
     const producers = nodes.filter(n => n.data?.type === 'producer' || n.id?.startsWith('jmx:')).length;
     const consumers = nodes.filter(n => n.data?.type === 'consumer' || n.id?.startsWith('group:')).length;
     const streams = nodes.filter(n => n.data?.type === 'streams').length;
+    const connectors = nodes.filter(n => n.data?.type === 'connector' || n.id?.startsWith('connect:')).length;
+    const acls = nodes.filter(n => n.data?.type === 'acl' || n.id?.startsWith('acl:topic:')).length;
     
-    return { topics, schemas, producers, consumers, streams };
+    return { topics, schemas, producers, consumers, streams, connectors, acls };
   }, [nodes]);
 
   // Transform snapshot data into ReactFlow elements
@@ -313,15 +331,15 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <h1 className="font-bold text-lg tracking-tight">{cluster?.name || "Loading..."}</h1>
-              {snapshot ? (
+              {health?.online ? (
                 <div className="flex items-center gap-1 text-xs text-green-400 bg-green-950/30 px-2 py-0.5 rounded border border-green-900/50">
                   <CheckCircle2 className="w-3 h-3" />
-                  <span>Connected</span>
+                  <span>Online</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1 text-xs text-red-400 bg-red-950/30 px-2 py-0.5 rounded border border-red-900/50">
                   <XCircle className="w-3 h-3" />
-                  <span>Disconnected</span>
+                  <span>Offline</span>
                 </div>
               )}
             </div>
@@ -336,6 +354,15 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                   <span className="flex items-center gap-1 text-blue-400">
                     <span>Schema:</span>
                     <span>{cluster.schemaRegistryUrl}</span>
+                  </span>
+                </>
+              )}
+              {cluster?.connectUrl && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 text-purple-400">
+                    <span>Connect:</span>
+                    <span>{cluster.connectUrl}</span>
                   </span>
                 </>
               )}
@@ -461,6 +488,29 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
         </div>
       </div>
 
+      {/* Offline Warning Banner */}
+      {health && !health.online && (
+        <div className="bg-yellow-950/30 border-y border-yellow-900/50 px-6 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-yellow-400">Cluster Offline</p>
+            <p className="text-xs text-yellow-400/80">
+              {health.error || "Cannot connect to Kafka cluster. Showing cached topology data."}
+            </p>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshTopology.isPending}
+            className="border-yellow-900/50 hover:bg-yellow-950/50"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshTopology.isPending ? 'animate-spin' : ''}`} />
+            Retry Connection
+          </Button>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Graph Area */}
@@ -513,6 +563,13 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                 </div>
                 <span className="font-bold text-foreground">{entityCounts.consumers}</span>
               </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-3 h-3 text-[hsl(var(--node-acl))]" />
+                  <span className="text-muted-foreground">ACLs</span>
+                </div>
+                <span className="font-bold text-foreground">{entityCounts.acls}</span>
+              </div>
               {entityCounts.streams > 0 && (
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
@@ -520,6 +577,15 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                     <span className="text-muted-foreground">Streams Apps</span>
                   </div>
                   <span className="font-bold text-foreground">{entityCounts.streams}</span>
+                </div>
+              )}
+              {entityCounts.connectors > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <ArrowRightLeft className="w-3 h-3 text-[hsl(var(--node-connector))]" />
+                    <span className="text-muted-foreground">Connectors</span>
+                  </div>
+                  <span className="font-bold text-foreground">{entityCounts.connectors}</span>
                 </div>
               )}
             </div>

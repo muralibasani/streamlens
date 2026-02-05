@@ -24,7 +24,7 @@ export function AiChatPanel({ topology, onHighlightNodes }: AiChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     { 
       role: "assistant", 
-      content: "👋 Hi! I'm StreamPilot, your AI assistant for navigating Kafka topologies. I can answer questions and automatically highlight & zoom to relevant nodes.\n\nTry asking:\n• 'Which producers write to testtopic?'\n• 'Show me all consumers of orders topic'\n• 'What topics does my-app produce to?'\n• 'Which topics have registered schemas?'",
+      content: "👋 Hi! I'm StreamPilot, your AI assistant for navigating Kafka topologies. I can answer questions and automatically highlight & zoom to relevant nodes.\n\nTry asking:\n• 'Which producers write to testtopic?'\n• 'Show me all consumers of orders topic'\n• 'What topics does my-app produce to?'\n• 'Which topics have registered schemas?'\n• 'Do we have any source or sink connectors?'",
       timestamp: Date.now() 
     }
   ]);
