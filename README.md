@@ -71,7 +71,7 @@ This makes StreamLens safe to use in production environments for monitoring and 
 
 ## Environment
 
-- **server**: `DATABASE_URL` (optional; default: SQLite at `server/topology.db`; use `postgresql://...` and `uv sync --extra postgres` to switch to PostgreSQL). Optional: `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL` for AI query.
+- **server**: `DATABASE_URL` (optional; default: SQLite at `server/topology.db`; use `postgresql://...` and `uv sync --extra postgres` to switch to PostgreSQL). Optional for AI chat: **OpenAI** — `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL`; **Gemini** — `AI_PROVIDER=gemini`, `AI_INTEGRATIONS_GEMINI_API_KEY` (`uv sync --extra gemini`); **Anthropic** — `AI_PROVIDER=anthropic`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY` (`uv sync --extra anthropic`); **Ollama** (local) — `AI_PROVIDER=ollama`, optional `OLLAMA_BASE_URL`, `OLLAMA_MODEL`. See [docs/AI_SETUP.md](docs/AI_SETUP.md).
 - **client**: `VITE_API_URL` (optional, default `http://localhost:5000` for proxy target).
 
 ## Topology: Auto-Discovery

@@ -1,4 +1,0 @@
-db
-lib
-main
-storage
