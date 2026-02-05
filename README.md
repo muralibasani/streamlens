@@ -2,6 +2,10 @@
 
 A full-stack app for visualizing Kafka topologies (topics, producers, consumers, streams, schemas, connectors) with an AI Q&A layer.
 
+
+<img src="resources/StreamLens.gif" alt="Demo" width="500">
+
+
 ## Project structure
 
 - **client/** — React frontend (Vite, TypeScript). Dependencies: `client/package.json`.
