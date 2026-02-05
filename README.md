@@ -42,7 +42,7 @@ If your Kafka cluster has ACLs enabled, you need to grant the StreamLens applica
 ```bash
 # Grant READ access to topics, consumer groups, and cluster metadata
 kafka-acls.sh --bootstrap-server localhost:9092 \
-  --add --allow-principal User:streamlens \
+  --add --allow-principal User:'*'  --allow-host streamlenshost\
   --operation Read --topic '*' \
   --operation Describe --topic '*' \
   --operation Describe --cluster \
@@ -58,7 +58,7 @@ kafka-acls.sh --bootstrap-server localhost:9092 \
 
 **StreamLens is 100% read-only.** It only performs the following operations:
 - ✅ List topics, consumer groups, connectors, schemas
-- ✅ Read cluster metadata and metrics
+- ✅ Read cluster metadata, consumer lag, topic contents and metrics
 - ✅ Query JMX for producer detection (if enabled)
 
 **It NEVER:**
@@ -94,19 +94,6 @@ Most entities are automatically discovered in real-time:
 - **Connectors** — From Kafka Connect API (optional)
 - **Schemas** — From Schema Registry (optional, click schema nodes to view full definitions)
 
-### Kafka Streams Configuration
-
-For **Kafka Streams applications**, create a simple `server/streams.yaml` file to link input and output topics:
-
-```yaml
-streams:
-  - name: payment-processor
-    consumerGroup: payment-processor-app
-    inputTopics: [payments.raw]
-    outputTopics: [payments.processed]
-```
-
-See [`docs/STREAMS_CONFIG.md`](docs/STREAMS_CONFIG.md) for full documentation.
 
 ### Visual Indicators
 
@@ -155,12 +142,10 @@ kafka-server-start.sh config/server.properties
 #   JMX_PORT: 9999
 ```
 
-**2. Configure JMX in StreamLens** (only needed ONCE per cluster - stored in database):
-```bash
-cd server
-uv run python3 debug/configure_jmx.py 1 localhost 9999
-# Replace '1' with your cluster ID (shown in the script output)
-```
+**2. Configure JMX in StreamLens** (only needed once per cluster; stored in the database). Use either:
+
+- **UI**: Open the cluster card → **Edit Cluster** → set **JMX Host** (e.g. `localhost`) and **JMX Port** (e.g. `9999`) → **Update Cluster**.
+- **CLI** (optional): `cd server && uv run python debug/configure_jmx.py <cluster_id> localhost 9999` (replace `<cluster_id>` with your cluster ID; run the script with no args to list clusters).
 
 **3. Restart backend and sync:**
 ```bash
@@ -183,7 +168,7 @@ cd server
 uv run uvicorn main:app --reload --port 5000
 ```
 
-JMX configuration is saved in the database - no need to run `configure_jmx.py` again!
+JMX configuration is saved in the database. You can change it anytime via **Edit Cluster** in the UI (or run `configure_jmx.py` again).
 
 ### Troubleshooting
 
