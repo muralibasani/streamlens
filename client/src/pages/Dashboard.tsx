@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useClusters, useDeleteCluster, useClusterHealth } from "@/hooks/use-kafka";
 import { CreateClusterDialog } from "@/components/CreateClusterDialog";
 import { EditClusterDialog } from "@/components/EditClusterDialog";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -11,49 +12,66 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Server, Activity, Trash2, ArrowRight, Database, Edit, XCircle, ArrowRightLeft } from "lucide-react";
+import { MoreHorizontal, Server, Activity, Trash2, ArrowRight, Database, Edit, XCircle, ArrowRightLeft, Shield, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 
 function ClusterCard({ cluster, onEdit, onDelete }: { cluster: any; onEdit: (cluster: any) => void; onDelete: (id: number) => void }) {
   const { data: health } = useClusterHealth(cluster.id);
-  
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      <Card className="group h-full hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 bg-card/50 backdrop-blur-sm">
-        <CardHeader className="pb-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500/10 to-blue-500/10">
-                <img 
-                  src="/streamlens-logo.svg" 
-                  alt="StreamLens" 
-                  className="w-6 h-6 object-contain"
-                />
+      <Card className="group h-full overflow-hidden border border-border/60 bg-card/40 backdrop-blur-sm transition-all duration-300 hover:border-primary/30 hover:shadow-2xl hover:shadow-primary/5 hover:bg-card/60">
+        {/* Status accent bar */}
+        <div
+          className={`h-1 w-full ${health?.online ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-gradient-to-r from-rose-500/80 to-rose-400/80"}`}
+        />
+        <CardHeader className="pb-3 pt-5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/20">
+                <img src="/streamlens-logo.svg" alt="" className="h-6 w-6 object-contain" />
               </div>
-              <CardTitle className="text-2xl font-bold tracking-tight">{cluster.name}</CardTitle>
+              <div className="min-w-0">
+                <CardTitle className="text-xl font-semibold tracking-tight truncate">{cluster.name}</CardTitle>
+                <div className="flex items-center gap-2 mt-1">
+                  {health?.online ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/20">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Online
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-medium text-rose-400 ring-1 ring-rose-500/20">
+                      <XCircle className="h-3 w-3" />
+                      Offline
+                    </span>
+                  )}
+                  {health?.clusterMode && (
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${health.clusterMode === "kraft" ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20" : "bg-amber-500/10 text-amber-400 ring-amber-500/20"}`}>
+                      <Shield className="h-3 w-3" />
+                      {health.clusterMode === "kraft" ? "KRaft" : "Zookeeper"}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
-                  <span className="sr-only">Open menu</span>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-card border-border">
-                <DropdownMenuItem 
-                  className="cursor-pointer"
-                  onClick={() => onEdit(cluster)}
-                >
+              <DropdownMenuContent align="end" className="w-48 rounded-xl border-border bg-card/95 backdrop-blur-sm">
+                <DropdownMenuItem className="cursor-pointer rounded-lg" onClick={() => onEdit(cluster)}>
                   <Edit className="mr-2 h-4 w-4" />
                   Edit Cluster
                 </DropdownMenuItem>
-                <DropdownMenuItem 
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                <DropdownMenuItem
+                  className="cursor-pointer rounded-lg text-destructive focus:text-destructive focus:bg-destructive/10"
                   onClick={() => onDelete(cluster.id)}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
@@ -62,66 +80,41 @@ function ClusterCard({ cluster, onEdit, onDelete }: { cluster: any; onEdit: (clu
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <CardDescription className="space-y-1">
-            <div className="font-mono text-xs truncate flex items-center gap-2" title={cluster.bootstrapServers}>
-              <Server className="w-3 h-3 flex-shrink-0" />
+          <CardDescription className="mt-3 space-y-2">
+            <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-muted-foreground" title={cluster.bootstrapServers}>
+              <Server className="h-3.5 w-3.5 shrink-0 text-muted-foreground/80" />
               <span className="truncate">{cluster.bootstrapServers}</span>
             </div>
             {cluster.schemaRegistryUrl && (
-              <div className="font-mono text-xs truncate flex items-center gap-2 text-blue-400" title={cluster.schemaRegistryUrl}>
-                <Database className="w-3 h-3 flex-shrink-0" />
+              <div className="flex items-center gap-2 font-mono text-xs text-blue-400/90 truncate" title={cluster.schemaRegistryUrl}>
+                <Database className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{cluster.schemaRegistryUrl}</span>
               </div>
             )}
             {cluster.connectUrl && (
-              <div className="font-mono text-xs truncate flex items-center gap-2 text-purple-400" title={cluster.connectUrl}>
-                <ArrowRightLeft className="w-3 h-3 flex-shrink-0" />
+              <div className="flex items-center gap-2 font-mono text-xs text-violet-400/90 truncate" title={cluster.connectUrl}>
+                <ArrowRightLeft className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">{cluster.connectUrl}</span>
-              </div>
-            )}
-            {health?.clusterMode && (
-              <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
-                <span>Mode:</span>
-                <span className={health.clusterMode === "kraft" ? "text-emerald-500" : "text-amber-500/90"}>
-                  {health.clusterMode === "kraft" ? "KRaft" : "Zookeeper"}
-                </span>
               </div>
             )}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="pt-0">
+          <div className="flex items-center justify-between border-t border-border/60 pt-4">
+            <span className="text-xs text-muted-foreground">
+              Added {formatDistanceToNow(new Date(cluster.createdAt || new Date()), { addSuffix: true })}
+            </span>
             {health?.online ? (
-              <div className="flex items-center gap-2 text-sm text-green-400">
-                <Activity className="w-4 h-4" />
-                <span>Status: Online</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-red-400">
-                <XCircle className="w-4 h-4" />
-                <span>Status: Offline</span>
-              </div>
-            )}
-            
-            <div className="pt-2 flex items-center justify-between text-xs text-muted-foreground border-t border-border">
-              <span>Added {formatDistanceToNow(new Date(cluster.createdAt || new Date()), { addSuffix: true })}</span>
-            </div>
-
-            {health?.online ? (
-              <Link href={`/topology/${cluster.id}`} className="block w-full">
-                <Button className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+              <Link href={`/topology/${cluster.id}`} className="block">
+                <Button className="rounded-lg bg-primary px-4 font-medium text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-primary/30 group-hover:scale-[1.02]">
                   View Topology
-                  <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Button>
               </Link>
             ) : (
-              <Button 
-                disabled 
-                className="w-full opacity-50 cursor-not-allowed"
-                title="Cluster is offline"
-              >
+              <Button disabled className="rounded-lg opacity-60 cursor-not-allowed" title="Cluster is offline">
                 View Topology
-                <ArrowRight className="ml-2 w-4 h-4" />
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             )}
           </div>
@@ -140,80 +133,109 @@ export default function Dashboard() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-          <p className="text-muted-foreground animate-pulse">Loading Kafka Clusters...</p>
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative">
+            <div className="h-14 w-14 rounded-2xl border-2 border-primary/30 border-t-primary animate-spin" />
+            <div className="absolute inset-0 h-14 w-14 rounded-2xl bg-primary/5 blur-xl" />
+          </div>
+          <p className="text-muted-foreground text-sm font-medium">Loading clusters...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-8">
-      <div className="max-w-7xl mx-auto space-y-12">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
-            <div className="relative">
-              <img 
-                src="/streamlens-logo.svg" 
-                alt="StreamLens Logo" 
-                className="w-16 h-16 object-contain"
-              />
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-blue-500/20 rounded-2xl blur-xl -z-10"></div>
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Subtle background gradient */}
+      <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,hsl(var(--primary)/0.08),transparent)]" />
+      <div className="fixed inset-0 -z-10 bg-[radial-gradient(ellipse_60%_40%_at_80%_100%,hsl(var(--primary)/0.04),transparent)]" />
+
+      <div className="relative mx-auto max-w-7xl px-6 py-10 sm:px-8 sm:py-12 lg:px-10">
+        {/* Hero */}
+        <motion.header
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between"
+        >
+          <div className="flex items-start gap-5">
+            <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/25 to-primary/5 ring-1 ring-primary/20 shadow-lg shadow-primary/10">
+              <img src="/streamlens-logo.svg" alt="" className="h-9 w-9 object-contain" />
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-primary/10 to-transparent blur-xl -z-10" />
             </div>
-            <div className="space-y-2">
-              <h1 className="text-5xl font-black tracking-tighter bg-gradient-to-br from-foreground to-foreground/40 bg-clip-text text-transparent">
-                StreamLens
-              </h1>
-              <p className="text-muted-foreground text-lg font-medium">
-                Visualize, analyze, and optimize your Apache Kafka event streaming platforms.
+            <div className="space-y-1 pt-0.5">
+              <h2 className="text-4xl font-extrabold tracking-tight sm:text-3xl">
+                <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text text-transparent">
+                  StreamLens
+                </span>
+              </h2>
+              <p className="max-w-sm text-sm leading-snug text-muted-foreground">
+                Visualize, analyze your Apache Kafka streaming platform.
               </p>
-              
             </div>
           </div>
-          <CreateClusterDialog />
-        </div>
-
-        {/* Empty state: no clusters (or backend not reachable) — just show Add cluster */}
-        {showEmptyState ? (
-          <div className="py-20 text-center border-2 border-dashed border-border rounded-3xl bg-card/30">
-            <Server className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
-            <h3 className="text-xl font-bold mb-2">Add cluster</h3>
-            <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-              Add a Kafka cluster to start visualizing your topic topology and data flow.
-            </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeToggle />
             <CreateClusterDialog />
           </div>
+        </motion.header>
+
+        {/* Content */}
+        {showEmptyState ? (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="mt-14 flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border/80 bg-card/20 px-8 py-16 text-center backdrop-blur-sm sm:py-20"
+          >
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted/50 ring-1 ring-border/60">
+              <Server className="h-10 w-10 text-muted-foreground/70" />
+            </div>
+            <h2 className="mt-6 text-xl font-semibold sm:text-2xl">your first cluster</h2>
+            <p className="mt-2 max-w-sm text-muted-foreground">
+              Connect a Kafka cluster to visualize topics, consumers, producers, and data flow.
+            </p>
+            <div className="mt-8">
+              <CreateClusterDialog />
+            </div>
+          </motion.section>
         ) : (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <h2 className="text-3xl font-bold tracking-tight">Your Kafka Clusters</h2>
-              <img 
-                src="https://kafka.apache.org/logos/kafka_logo--simple.png" 
-                alt="Kafka" 
-                className="h-6 object-contain opacity-40 brightness-0 dark:brightness-100 dark:invert"
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="mt-14 space-y-8"
+          >
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Your clusters</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                <Sparkles className="h-4 w-4" />
+                {clusters?.length} {clusters?.length === 1 ? "cluster" : "clusters"}
+              </span>
+              <img
+                src="https://kafka.apache.org/logos/kafka_logo--simple.png"
+                alt=""
+                className="h-5 opacity-50 brightness-0 dark:brightness-100 dark:invert"
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
               {clusters?.map((cluster) => (
-                <ClusterCard 
-                key={cluster.id} 
-                cluster={cluster} 
-                onEdit={setEditingCluster} 
-                onDelete={(id) => {
-                  if (confirm("Are you sure? This cannot be undone.")) {
-                    deleteCluster.mutate(id);
-                  }
-                }} 
-              />
+                <ClusterCard
+                  key={cluster.id}
+                  cluster={cluster}
+                  onEdit={setEditingCluster}
+                  onDelete={(id) => {
+                    if (confirm("Delete this cluster? This cannot be undone.")) {
+                      deleteCluster.mutate(id);
+                    }
+                  }}
+                />
               ))}
             </div>
-          </div>
+          </motion.section>
         )}
       </div>
 
-      {/* Edit Cluster Dialog */}
       {editingCluster && (
         <EditClusterDialog
           open={!!editingCluster}

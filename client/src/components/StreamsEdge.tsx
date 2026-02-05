@@ -33,7 +33,7 @@ function StreamsEdgeComponent({
       labelY={labelY}
       markerEnd={markerEnd}
       style={{
-        stroke: "white",
+        stroke: "hsl(var(--edge-stroke))",
         strokeWidth: 2.5,
         strokeDasharray: "8 4",
         animation: "streams-edge-dash 0.8s linear infinite",

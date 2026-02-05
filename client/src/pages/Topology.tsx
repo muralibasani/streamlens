@@ -14,10 +14,12 @@ import { useTopology, useRefreshTopology, useCluster, useClusterHealth } from "@
 import TopologyNode from "@/components/TopologyNode";
 import { StreamsEdge } from "@/components/StreamsEdge";
 import { AiChatPanel } from "@/components/AiChatPanel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/hooks/use-theme";
 import { Link } from "wouter";
 import {
   Popover,
@@ -62,8 +64,11 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
   const { data: health } = useClusterHealth(clusterId);
   const refreshTopology = useRefreshTopology();
   const { toast } = useToast();
+  const { theme } = useTheme();
   const reactFlowInstance = useReactFlow();
   const [, setLocation] = useLocation();
+
+  const backgroundGridColor = theme === "dark" ? "#4b5563" : "#94a3b8";
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -105,11 +110,29 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
 
     const rawNodes = Array.isArray((data as any).nodes) ? (data as any).nodes : [];
     const rawEdges = Array.isArray((data as any).edges) ? (data as any).edges : [];
+    const enableProduceFromUi = cluster?.enableKafkaEventProduceFromUi ?? false;
+
+    const topicIdsWithConnector = new Set<string>();
+    for (const e of rawEdges) {
+      const src = String(e.source ?? "");
+      const tgt = String(e.target ?? "");
+      if (src.startsWith("connect:") && tgt.startsWith("topic:")) topicIdsWithConnector.add(tgt);
+      if (tgt.startsWith("connect:") && src.startsWith("topic:")) topicIdsWithConnector.add(src);
+    }
 
     const initialNodes = rawNodes.map((n: any) => ({
       ...n,
       type: "kafkaNode",
-      data: { ...n.data, type: n.type, highlighted: false, searchHighlighted: false },
+      data: {
+        ...n.data,
+        type: n.type,
+        highlighted: false,
+        searchHighlighted: false,
+        ...(n.type === "topic" && {
+          enableProduceFromUi,
+          hasConnector: topicIdsWithConnector.has(String(n.id)),
+        }),
+      },
     }));
 
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
@@ -134,7 +157,7 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
         };
       })
     );
-  }, [snapshot]);
+  }, [snapshot, cluster]);
 
   // Handle manual refresh request
   const handleRefresh = async () => {
@@ -320,8 +343,8 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
           </Link>
           <div className="flex items-center gap-3 pr-4 border-r border-border">
             <img 
-              src="https://kafka.apache.org/logos/kafka_logo--simple.png" 
-              alt="Kafka Logo" 
+              src="/streamlens-logo.svg" 
+              alt="StreamLens" 
               className="w-8 h-8 object-contain"
             />
             <span className="font-black text-2xl tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
@@ -485,6 +508,7 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
             <RefreshCw className={`w-4 h-4 mr-2 ${refreshTopology.isPending ? 'animate-spin' : ''}`} />
             Sync
           </Button>
+          <ThemeToggle />
         </div>
       </div>
 
@@ -514,7 +538,7 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Graph Area */}
-        <div className="flex-1 relative bg-neutral-900/50">
+        <div className="flex-1 relative bg-neutral-100 dark:bg-neutral-900/50">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -525,7 +549,11 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
             fitView
             className="bg-dots-pattern"
           >
-            <Background color="#333" gap={20} size={1} />
+            <Background
+              color={backgroundGridColor}
+              gap={20}
+              size={1}
+            />
             <Controls className="!bg-card !border-border !fill-foreground" />
           </ReactFlow>
 

@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 import yaml
 from confluent_kafka.admin import AdminClient
-from confluent_kafka import Consumer, TopicPartition, KafkaException
+from confluent_kafka import Consumer, Producer, TopicPartition, KafkaException
 from confluent_kafka._model import ConsumerGroupTopicPartitions
 
 logger = logging.getLogger(__name__)
@@ -894,7 +894,55 @@ class KafkaService:
         except Exception as e:
             logger.error(f"Failed to fetch topic details for {topic_name}: {e}", exc_info=True)
             raise RuntimeError(f"Could not fetch topic details: {str(e)}") from e
-    
+
+    def produce_message(
+        self, bootstrap_servers: str, topic_name: str, value: str, key: str | None = None
+    ) -> dict[str, Any]:
+        """
+        Produce a single message to a topic. Value and optional key are sent as UTF-8.
+        Rejects internal topics (names starting with _, e.g. __consumer_offsets, _schemas).
+        Returns: {"ok": True, "partition": int, "offset": int} or raises RuntimeError.
+        """
+        name = (topic_name or "").strip()
+        if not name or name.startswith("_"):
+            raise RuntimeError("Cannot produce to internal topics (names starting with _)")
+        bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
+        if not bootstrap_list:
+            raise RuntimeError("No bootstrap servers configured")
+        try:
+            producer = Producer({
+                "bootstrap.servers": ",".join(bootstrap_list),
+                "client.id": "streamlens-ui-producer",
+            })
+            value_bytes = value.encode("utf-8")
+            key_bytes = key.encode("utf-8") if key else None
+            delivered = {"partition": None, "offset": None, "err": None}
+
+            def delivery_callback(err, msg):
+                if err:
+                    delivered["err"] = err
+                else:
+                    delivered["partition"] = msg.partition()
+                    delivered["offset"] = msg.offset()
+
+            producer.produce(
+                topic_name,
+                value=value_bytes,
+                key=key_bytes,
+                callback=delivery_callback,
+            )
+            producer.flush(timeout=10)
+            if delivered["err"]:
+                raise RuntimeError(str(delivered["err"]))
+            return {
+                "ok": True,
+                "partition": delivered["partition"],
+                "offset": delivered["offset"],
+            }
+        except Exception as e:
+            logger.exception("Produce failed for topic %s: %s", topic_name, e)
+            raise RuntimeError(f"Produce failed: {str(e)}") from e
+
     def fetch_consumer_lag(self, bootstrap_servers: str, group_id: str) -> dict[str, Any]:
         """
         Fetch consumer lag per partition for a specific consumer group.
