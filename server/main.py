@@ -42,6 +42,11 @@ class AiQueryBody(BaseModel):
     topology: dict
 
 
+class ProduceMessageBody(BaseModel):
+    value: str
+    key: str | None = None
+
+
 def seed_data(db: Session):
     clusters = get_clusters(db)
     if not clusters:
@@ -108,12 +113,16 @@ def clusters_list(db: Session = Depends(get_db)):
     return get_clusters(db)
 
 
+def _is_produce_from_ui_enabled() -> bool:
+    return os.environ.get("ENABLE_KAFKA_EVENT_PRODUCE_FROM_UI", "false").strip().lower() in ("true", "1", "yes")
+
+
 @app.get("/api/clusters/{id}")
 def clusters_get(id: int, db: Session = Depends(get_db)):
     cluster = get_cluster(db, id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    return cluster
+    return {**cluster, "enableKafkaEventProduceFromUi": _is_produce_from_ui_enabled()}
 
 
 @app.get("/api/clusters/{id}/health")
@@ -258,6 +267,56 @@ def get_topic_details(id: int, topic_name: str, include_messages: bool = False, 
         return kafka_service.fetch_topic_details(bootstrap_servers, topic_name, include_messages)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/clusters/{id}/topic/{topic_name}/produce")
+def produce_to_topic(
+    id: int,
+    topic_name: str,
+    body: ProduceMessageBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Produce a single message to a topic. Value is free text; key is optional.
+    Enabled only when ENABLE_KAFKA_EVENT_PRODUCE_FROM_UI is set (true/1/yes).
+    """
+    from lib.kafka import kafka_service
+
+    if not _is_produce_from_ui_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Produce from UI is disabled. Set ENABLE_KAFKA_EVENT_PRODUCE_FROM_UI=true to enable.",
+        )
+
+    cluster = get_cluster(db, id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+
+    # Disallow produce to topics that have a connector attached
+    snapshot = get_latest_snapshot(db, id)
+    if snapshot and isinstance(snapshot.get("data"), dict):
+        edges = snapshot["data"].get("edges") or []
+        topic_id = f"topic:{topic_name}"
+        for e in edges:
+            src, tgt = str(e.get("source") or ""), str(e.get("target") or "")
+            if (src == topic_id and tgt.startswith("connect:")) or (
+                tgt == topic_id and src.startswith("connect:")
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Cannot produce to topics that have connectors attached.",
+                )
+
+    bootstrap_servers = cluster.get("bootstrapServers")
+    if not bootstrap_servers:
+        raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
+
+    try:
+        return kafka_service.produce_message(
+            bootstrap_servers, topic_name, body.value, body.key
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/clusters/{id}/connector/{connector_name}/details")

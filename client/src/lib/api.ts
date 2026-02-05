@@ -31,6 +31,7 @@ const clusterSchema = z.object({
   connectUrl: z.string().nullable(),
   jmxHost: z.string().nullable().optional(),
   jmxPort: z.number().nullable().optional(),
+  enableKafkaEventProduceFromUi: z.boolean().optional(),
   createdAt: z.string().optional(),
 });
 

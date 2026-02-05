@@ -106,11 +106,29 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
 
     const rawNodes = Array.isArray((data as any).nodes) ? (data as any).nodes : [];
     const rawEdges = Array.isArray((data as any).edges) ? (data as any).edges : [];
+    const enableProduceFromUi = cluster?.enableKafkaEventProduceFromUi ?? false;
+
+    const topicIdsWithConnector = new Set<string>();
+    for (const e of rawEdges) {
+      const src = String(e.source ?? "");
+      const tgt = String(e.target ?? "");
+      if (src.startsWith("connect:") && tgt.startsWith("topic:")) topicIdsWithConnector.add(tgt);
+      if (tgt.startsWith("connect:") && src.startsWith("topic:")) topicIdsWithConnector.add(src);
+    }
 
     const initialNodes = rawNodes.map((n: any) => ({
       ...n,
       type: "kafkaNode",
-      data: { ...n.data, type: n.type, highlighted: false, searchHighlighted: false },
+      data: {
+        ...n.data,
+        type: n.type,
+        highlighted: false,
+        searchHighlighted: false,
+        ...(n.type === "topic" && {
+          enableProduceFromUi,
+          hasConnector: topicIdsWithConnector.has(String(n.id)),
+        }),
+      },
     }));
 
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
@@ -135,7 +153,7 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
         };
       })
     );
-  }, [snapshot]);
+  }, [snapshot, cluster]);
 
   // Handle manual refresh request
   const handleRefresh = async () => {

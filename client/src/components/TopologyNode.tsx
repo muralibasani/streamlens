@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Activity, Box, ArrowRightLeft, FileJson, GitBranch, Sparkles, Shield, User, Zap } from 'lucide-react';
+import { Activity, Box, ArrowRightLeft, FileJson, GitBranch, Send, Sparkles, Shield, User, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -16,6 +16,10 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 import { useRoute } from 'wouter';
 
 // Custom horizontal cylinder icon for Kafka topics
@@ -128,8 +132,12 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
   
   const [showTopicDialog, setShowTopicDialog] = useState(false);
   const [topicDetails, setTopicDetails] = useState<any>(null);
+  const [produceValue, setProduceValue] = useState("");
+  const [produceKey, setProduceKey] = useState("");
+  const [isProducing, setIsProducing] = useState(false);
 
   const [showAclDialog, setShowAclDialog] = useState(false);
+  const { toast } = useToast();
   const [isLoadingTopic, setIsLoadingTopic] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
@@ -229,6 +237,51 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
       console.error('Failed to fetch topic messages:', error);
     } finally {
       setIsLoadingMessages(false);
+    }
+  };
+
+  const topicName = (data.type === "topic" ? (data.label || "") : "") as string;
+  const isInternalTopic = topicName.startsWith("_");
+
+  const handleProduce = async () => {
+    const value = produceValue.trim();
+    if (!value) {
+      toast({ title: "Message required", description: "Enter message text to produce.", variant: "destructive" });
+      return;
+    }
+    setIsProducing(true);
+    try {
+      const res = await fetch(`/api/clusters/${clusterId}/topic/${encodeURIComponent(topicName)}/produce`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value, key: produceKey.trim() || undefined }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (res.ok && result.ok) {
+        toast({
+          title: "Message produced",
+          description: `Partition ${result.partition}, offset ${result.offset}`,
+        });
+        setProduceValue("");
+        setProduceKey("");
+        if (topicDetails && messagesLoaded) {
+          handleLoadMessages();
+        }
+      } else {
+        toast({
+          title: "Produce failed",
+          description: result.detail || res.statusText || "Could not produce message",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Produce failed",
+        description: error instanceof Error ? error.message : "Network error",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProducing(false);
     }
   };
 
@@ -630,6 +683,58 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
                   </div>
                 </div>
               </div>
+
+              {/* Produce message - only when enabled by config, for user topics, and no connector attached */}
+              {!isInternalTopic && data.enableProduceFromUi && !data.hasConnector && (
+                <div className="border border-border rounded-lg p-4">
+                  <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                    <Send className="w-5 h-5 text-primary" />
+                    Produce message
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="produce-value" className="text-sm">Message (required)</Label>
+                      <Textarea
+                        id="produce-value"
+                        placeholder="Enter message text..."
+                        value={produceValue}
+                        onChange={(e) => setProduceValue(e.target.value)}
+                        className="mt-1.5 min-h-[80px] font-mono text-sm resize-y"
+                        disabled={isProducing}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="produce-key" className="text-sm text-muted-foreground">Key (optional)</Label>
+                      <Input
+                        id="produce-key"
+                        placeholder="Optional message key"
+                        value={produceKey}
+                        onChange={(e) => setProduceKey(e.target.value)}
+                        className="mt-1.5 font-mono"
+                        disabled={isProducing}
+                      />
+                    </div>
+                    <Button
+                      onClick={handleProduce}
+                      disabled={isProducing || !produceValue.trim()}
+                      size="sm"
+                      className="gap-2"
+                    >
+                      {isProducing ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary border-t-transparent" />
+                          Producing...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Produce
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Recent Messages - Load on Demand */}
               <div className="border border-border rounded-lg p-4">
