@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Activity, Box, ArrowRightLeft, FileJson, GitBranch, Send, Sparkles, Shield, User, Zap } from 'lucide-react';
+import { Activity, Box, ArrowRightLeft, FileJson, GitBranch, Send, Sparkles, Shield, User, Zap, Code, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -19,6 +19,13 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useRoute } from 'wouter';
 
@@ -141,6 +148,13 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
   const [isLoadingTopic, setIsLoadingTopic] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
+
+  const [codeGenClient, setCodeGenClient] = useState<'producer' | 'consumer' | 'streams'>('producer');
+  const [codeGenLanguage, setCodeGenLanguage] = useState<'java' | 'python'>('java');
+  const [codeGenSchemaRegistry, setCodeGenSchemaRegistry] = useState(false);
+  const [codeGenOutputTopic, setCodeGenOutputTopic] = useState(''); // for streams: target topic
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [isLoadingCode, setIsLoadingCode] = useState(false);
   
   const [showConnectorDialog, setShowConnectorDialog] = useState(false);
   const [connectorDetails, setConnectorDetails] = useState<any>(null);
@@ -203,6 +217,7 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
     setShowTopicDialog(true);
     setIsLoadingTopic(true);
     setMessagesLoaded(false);
+    setGeneratedCode(null);
     
     try {
       const topicName = data.label || '';
@@ -216,6 +231,45 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
       console.error('Failed to fetch topic details:', error);
     } finally {
       setIsLoadingTopic(false);
+    }
+  };
+
+  const handleGenerateCode = async () => {
+    const topicName = topicDetails?.name || data.label || '';
+    if (!topicName) return;
+    setIsLoadingCode(true);
+    setGeneratedCode(null);
+    try {
+      const params: Record<string, string> = {
+        client: codeGenClient,
+        language: codeGenClient === 'streams' ? 'java' : codeGenLanguage,
+        schema_registry: codeGenClient === 'streams' ? 'false' : String(codeGenSchemaRegistry),
+      };
+      if (codeGenClient === 'streams' && codeGenOutputTopic.trim()) {
+        params.output_topic = codeGenOutputTopic.trim();
+      }
+      const res = await fetch(`/api/clusters/${clusterId}/topic/${encodeURIComponent(topicName)}/code?${new URLSearchParams(params)}`);
+      if (res.ok) {
+        const json = await res.json();
+        setGeneratedCode(json.code ?? '');
+      } else {
+        toast({ title: 'Failed to generate code', variant: 'destructive' });
+      }
+    } catch (e) {
+      console.error('Failed to fetch code:', e);
+      toast({ title: 'Failed to generate code', variant: 'destructive' });
+    } finally {
+      setIsLoadingCode(false);
+    }
+  };
+
+  const handleCopyCode = async () => {
+    if (!generatedCode) return;
+    try {
+      await navigator.clipboard.writeText(generatedCode);
+      toast({ title: 'Copied to clipboard' });
+    } catch {
+      toast({ title: 'Failed to copy', variant: 'destructive' });
     }
   };
 
@@ -693,6 +747,96 @@ export default memo(({ data, selected }: { data: any, selected: boolean }) => {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Generate client code */}
+              <div className="border border-border rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                  <Code className="w-5 h-5 text-primary" />
+                  Generate client code
+                </h3>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Client</Label>
+                    <Select value={codeGenClient} onValueChange={(v: 'producer' | 'consumer' | 'streams') => setCodeGenClient(v)}>
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="producer">Producer</SelectItem>
+                        <SelectItem value="consumer">Consumer</SelectItem>
+                        <SelectItem value="streams">Kafka Streams</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {codeGenClient !== 'streams' && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Language</Label>
+                      <Select value={codeGenLanguage} onValueChange={(v: 'java' | 'python') => setCodeGenLanguage(v)}>
+                        <SelectTrigger className="w-[120px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="java">Java</SelectItem>
+                          <SelectItem value="python">Python</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {codeGenClient === 'streams' && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Output topic</Label>
+                      <Input
+                        placeholder={(topicDetails?.name || data.label || '') + '-processed'}
+                        value={codeGenOutputTopic}
+                        onChange={(e) => setCodeGenOutputTopic(e.target.value)}
+                        className="w-[180px] font-mono text-sm"
+                      />
+                    </div>
+                  )}
+                  {codeGenClient !== 'streams' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="code-schema-registry"
+                        checked={codeGenSchemaRegistry}
+                        onChange={(e) => setCodeGenSchemaRegistry(e.target.checked)}
+                        className="rounded border-border"
+                      />
+                      <Label htmlFor="code-schema-registry" className="text-sm cursor-pointer">With Schema Registry</Label>
+                    </div>
+                  )}
+                  <Button
+                    onClick={handleGenerateCode}
+                    disabled={isLoadingCode}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {isLoadingCode ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary border-t-transparent" />
+                    ) : (
+                      <Code className="w-4 h-4" />
+                    )}
+                    Generate
+                  </Button>
+                </div>
+                {generatedCode && (
+                  <div className="relative">
+                    <pre className="bg-muted p-4 rounded-lg text-xs font-mono overflow-auto max-h-80 whitespace-pre-wrap border border-border">
+                      {generatedCode}
+                    </pre>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="absolute top-2 right-2 gap-1.5"
+                      onClick={handleCopyCode}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Produce message - only when enabled by config, for user topics, and no connector attached */}

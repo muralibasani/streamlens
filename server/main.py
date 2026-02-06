@@ -225,6 +225,51 @@ def get_schema_details(id: int, subject: str, version: str | None = None):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@app.get("/api/clusters/{id}/topic/{topic_name}/code")
+def get_topic_code(
+    id: int,
+    topic_name: str,
+    client: str = "producer",  # producer | consumer | streams
+    language: str = "java",   # java | python (streams is Java only)
+    schema_registry: bool = False,
+    output_topic: str | None = None,  # for client=streams: target topic name
+):
+    """Generate sample producer/consumer/streams code for the topic. Users can copy the code."""
+    from lib.codegen import generate_code
+
+    cluster = get_cluster(id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    bootstrap_servers = cluster.get("bootstrapServers") or ""
+    if not bootstrap_servers:
+        raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
+    if client not in ("producer", "consumer", "streams"):
+        raise HTTPException(status_code=400, detail="client must be producer, consumer, or streams")
+    if client != "streams" and language not in ("java", "python"):
+        raise HTTPException(status_code=400, detail="language must be java or python")
+
+    if client == "streams":
+        code = generate_code(
+            bootstrap_servers=bootstrap_servers,
+            topic=topic_name,
+            client="streams",
+            language="java",
+            schema_registry=False,
+            output_topic=output_topic or None,
+        )
+        return {"code": code, "client": "streams", "language": "java", "schemaRegistry": False}
+    schema_registry_url = cluster.get("schemaRegistryUrl") if schema_registry else None
+    code = generate_code(
+        bootstrap_servers=bootstrap_servers,
+        topic=topic_name,
+        client=client,
+        language=language,
+        schema_registry=schema_registry,
+        schema_registry_url=schema_registry_url,
+    )
+    return {"code": code, "client": client, "language": language, "schemaRegistry": schema_registry}
+
+
 @app.get("/api/clusters/{id}/topic/{topic_name}/details")
 def get_topic_details(id: int, topic_name: str, include_messages: bool = False):
     """
