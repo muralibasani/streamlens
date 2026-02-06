@@ -18,6 +18,7 @@ export const insertClusterSchema = z.object({
     },
     z.number().int().positive().optional()
   ),
+  enableKafkaEventProduceFromUi: z.boolean().optional(),
 });
 
 export type InsertCluster = z.infer<typeof insertClusterSchema>;
@@ -41,6 +42,12 @@ const snapshotSchema = z.object({
   data: z.object({
     nodes: z.array(z.any()),
     edges: z.array(z.any()),
+    _meta: z
+      .object({
+        totalTopicCount: z.number(),
+        shownTopicCount: z.number(),
+      })
+      .optional(),
   }),
   createdAt: z.string().optional(),
 });

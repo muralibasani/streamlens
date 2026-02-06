@@ -4,23 +4,22 @@ import time
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
 # Load environment variables from server directory so it works when run from project root
 _server_dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(_server_dir, ".env.dev"))
 load_dotenv(os.path.join(_server_dir, ".env"))
 
-from db import get_db, init_db
 from storage import (
     get_clusters,
     get_cluster,
-    create_cluster as db_create_cluster,
-    delete_cluster as db_delete_cluster,
+    create_cluster,
+    update_cluster,
+    delete_cluster,
     get_latest_snapshot,
     create_snapshot,
 )
@@ -35,6 +34,7 @@ class CreateClusterBody(BaseModel):
     connectUrl: str | None = None
     jmxHost: str | None = None
     jmxPort: int | None = None
+    enableKafkaEventProduceFromUi: bool | None = None
 
 
 class AiQueryBody(BaseModel):
@@ -47,45 +47,27 @@ class ProduceMessageBody(BaseModel):
     key: str | None = None
 
 
-def seed_data(db: Session):
-    clusters = get_clusters(db)
-    if not clusters:
-        db_create_cluster(
-            db,
-            name="Production Cluster",
-            bootstrap_servers="pkc-1234.us-east-1.aws.confluent.cloud:9092",
-            schema_registry_url="https://psrc-1234.us-east-1.aws.confluent.cloud",
-            connect_url="https://connect.internal:8083",
-        )
-
-
 def indexer_loop():
     """Background loop: refresh topology snapshots every minute."""
-    from db import SessionLocal
     while True:
         time.sleep(60)
         try:
-            db = SessionLocal()
-            clusters = get_clusters(db)
+            clusters = get_clusters()
             for c in clusters:
                 try:
                     print(f"Indexing cluster {c['name']}...")
                     graph = build_topology(c["id"], c)
-                    create_snapshot(db, c["id"], graph)
+                    create_snapshot(c["id"], graph)
                 except Exception as e:
                     print(f"Indexer error for cluster {c['id']}: {e}")
-            db.close()
         except Exception as e:
             print("Indexer error:", e)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
-    from db import SessionLocal
-    db = SessionLocal()
-    seed_data(db)
-    db.close()
+    from storage import _ensure_clusters_file
+    _ensure_clusters_file()
     t = threading.Thread(target=indexer_loop, daemon=True)
     t.start()
     yield
@@ -109,31 +91,27 @@ def health():
 
 
 @app.get("/api/clusters")
-def clusters_list(db: Session = Depends(get_db)):
-    return get_clusters(db)
-
-
-def _is_produce_from_ui_enabled() -> bool:
-    return os.environ.get("ENABLE_KAFKA_EVENT_PRODUCE_FROM_UI", "false").strip().lower() in ("true", "1", "yes")
+def clusters_list():
+    return get_clusters()
 
 
 @app.get("/api/clusters/{id}")
-def clusters_get(id: int, db: Session = Depends(get_db)):
-    cluster = get_cluster(db, id)
+def clusters_get(id: int):
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    return {**cluster, "enableKafkaEventProduceFromUi": _is_produce_from_ui_enabled()}
+    return cluster
 
 
 @app.get("/api/clusters/{id}/health")
-def cluster_health(id: int, db: Session = Depends(get_db)):
+def cluster_health(id: int):
     from lib.kafka import kafka_service
-    
-    cluster = get_cluster(db, id)
+
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     
-    health = kafka_service.check_cluster_health(cluster.get("bootstrapServers", ""))
+    health = kafka_service.check_cluster_health(cluster)
     return {
         "clusterId": id,
         "online": health["online"],
@@ -143,19 +121,19 @@ def cluster_health(id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/clusters")
-def clusters_create(body: CreateClusterBody, db: Session = Depends(get_db)):
+def clusters_create(body: CreateClusterBody):
     try:
-        cluster = db_create_cluster(
-            db,
+        cluster = create_cluster(
             name=body.name,
             bootstrap_servers=body.bootstrapServers,
             schema_registry_url=body.schemaRegistryUrl,
             connect_url=body.connectUrl,
             jmx_host=body.jmxHost,
             jmx_port=body.jmxPort,
+            enable_kafka_event_produce_from_ui=body.enableKafkaEventProduceFromUi if body.enableKafkaEventProduceFromUi is not None else False,
         )
         graph = build_topology(cluster["id"], cluster)
-        create_snapshot(db, cluster["id"], graph)
+        create_snapshot(cluster["id"], graph)
         return cluster
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail={"message": str(e), "field": None})
@@ -164,16 +142,13 @@ def clusters_create(body: CreateClusterBody, db: Session = Depends(get_db)):
 
 
 @app.put("/api/clusters/{id}")
-def clusters_update(id: int, body: CreateClusterBody, db: Session = Depends(get_db)):
-    from storage import update_cluster as db_update_cluster
-    existing = get_cluster(db, id)
+def clusters_update(id: int, body: CreateClusterBody):
+    existing = get_cluster(id)
     if not existing:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    # Preserve JMX if not sent (e.g. Edit form didn't include them)
     jmx_host = body.jmxHost if body.jmxHost is not None else existing.get("jmxHost")
     jmx_port = body.jmxPort if body.jmxPort is not None else existing.get("jmxPort")
-    cluster = db_update_cluster(
-        db,
+    cluster = update_cluster(
         id,
         name=body.name,
         bootstrap_servers=body.bootstrapServers,
@@ -181,28 +156,32 @@ def clusters_update(id: int, body: CreateClusterBody, db: Session = Depends(get_
         connect_url=body.connectUrl,
         jmx_host=jmx_host,
         jmx_port=jmx_port,
+        enable_kafka_event_produce_from_ui=body.enableKafkaEventProduceFromUi,  # None = preserve existing
     )
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     return cluster
 
 @app.delete("/api/clusters/{id}", status_code=204)
-def clusters_delete(id: int, db: Session = Depends(get_db)):
-    db_delete_cluster(db, id)
+def clusters_delete(id: int):
+    cluster = get_cluster(id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    delete_cluster(id)
     return Response(status_code=204)
 
 
 @app.get("/api/clusters/{id}/topology")
-def topology_get(id: int, db: Session = Depends(get_db)):
-    cluster = get_cluster(db, id)
+def topology_get(id: int):
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    snapshot = get_latest_snapshot(db, id)
+    snapshot = get_latest_snapshot(id)
     if snapshot:
         return snapshot
     try:
         graph = build_topology(id, cluster)
-        snapshot = create_snapshot(db, id, graph)
+        snapshot = create_snapshot(id, graph)
         return snapshot
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -211,19 +190,19 @@ def topology_get(id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/clusters/{id}/refresh")
-def topology_refresh(id: int, db: Session = Depends(get_db)):
-    cluster = get_cluster(db, id)
+def topology_refresh(id: int):
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     try:
         graph = build_topology(id, cluster)
-        return create_snapshot(db, id, graph)
+        return create_snapshot(id, graph)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
 
 @app.get("/api/clusters/{id}/schema/{subject}")
-def get_schema_details(id: int, subject: str, version: str | None = None, db: Session = Depends(get_db)):
+def get_schema_details(id: int, subject: str, version: str | None = None):
     """
     Lazy-load schema details for a specific subject and version.
     If version is not provided, returns latest version.
@@ -232,7 +211,7 @@ def get_schema_details(id: int, subject: str, version: str | None = None, db: Se
     """
     from lib.kafka import kafka_service
     
-    cluster = get_cluster(db, id)
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     
@@ -246,8 +225,53 @@ def get_schema_details(id: int, subject: str, version: str | None = None, db: Se
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@app.get("/api/clusters/{id}/topic/{topic_name}/code")
+def get_topic_code(
+    id: int,
+    topic_name: str,
+    client: str = "producer",  # producer | consumer | streams
+    language: str = "java",   # java | python (streams is Java only)
+    schema_registry: bool = False,
+    output_topic: str | None = None,  # for client=streams: target topic name
+):
+    """Generate sample producer/consumer/streams code for the topic. Users can copy the code."""
+    from lib.codegen import generate_code
+
+    cluster = get_cluster(id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    bootstrap_servers = cluster.get("bootstrapServers") or ""
+    if not bootstrap_servers:
+        raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
+    if client not in ("producer", "consumer", "streams"):
+        raise HTTPException(status_code=400, detail="client must be producer, consumer, or streams")
+    if client != "streams" and language not in ("java", "python"):
+        raise HTTPException(status_code=400, detail="language must be java or python")
+
+    if client == "streams":
+        code = generate_code(
+            bootstrap_servers=bootstrap_servers,
+            topic=topic_name,
+            client="streams",
+            language="java",
+            schema_registry=False,
+            output_topic=output_topic or None,
+        )
+        return {"code": code, "client": "streams", "language": "java", "schemaRegistry": False}
+    schema_registry_url = cluster.get("schemaRegistryUrl") if schema_registry else None
+    code = generate_code(
+        bootstrap_servers=bootstrap_servers,
+        topic=topic_name,
+        client=client,
+        language=language,
+        schema_registry=schema_registry,
+        schema_registry_url=schema_registry_url,
+    )
+    return {"code": code, "client": client, "language": language, "schemaRegistry": schema_registry}
+
+
 @app.get("/api/clusters/{id}/topic/{topic_name}/details")
-def get_topic_details(id: int, topic_name: str, include_messages: bool = False, db: Session = Depends(get_db)):
+def get_topic_details(id: int, topic_name: str, include_messages: bool = False):
     """
     Fetch detailed configuration for a specific topic.
     Optionally fetch recent messages if include_messages=true.
@@ -255,45 +279,38 @@ def get_topic_details(id: int, topic_name: str, include_messages: bool = False, 
     """
     from lib.kafka import kafka_service
     
-    cluster = get_cluster(db, id)
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     
-    bootstrap_servers = cluster.get("bootstrapServers")
-    if not bootstrap_servers:
+    if not cluster.get("bootstrapServers"):
         raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
     
     try:
-        return kafka_service.fetch_topic_details(bootstrap_servers, topic_name, include_messages)
+        return kafka_service.fetch_topic_details(cluster, topic_name, include_messages)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.post("/api/clusters/{id}/topic/{topic_name}/produce")
-def produce_to_topic(
-    id: int,
-    topic_name: str,
-    body: ProduceMessageBody,
-    db: Session = Depends(get_db),
-):
+def produce_to_topic(id: int, topic_name: str, body: ProduceMessageBody):
     """
     Produce a single message to a topic. Value is free text; key is optional.
     Enabled only when ENABLE_KAFKA_EVENT_PRODUCE_FROM_UI is set (true/1/yes).
     """
     from lib.kafka import kafka_service
 
-    if not _is_produce_from_ui_enabled():
-        raise HTTPException(
-            status_code=403,
-            detail="Produce from UI is disabled. Set ENABLE_KAFKA_EVENT_PRODUCE_FROM_UI=true to enable.",
-        )
-
-    cluster = get_cluster(db, id)
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
+    if not cluster.get("enableKafkaEventProduceFromUi"):
+        raise HTTPException(
+            status_code=403,
+            detail="Produce from UI is disabled for this cluster. Enable it in cluster settings (edit cluster).",
+        )
 
     # Disallow produce to topics that have a connector attached
-    snapshot = get_latest_snapshot(db, id)
+    snapshot = get_latest_snapshot(id)
     if snapshot and isinstance(snapshot.get("data"), dict):
         edges = snapshot["data"].get("edges") or []
         topic_id = f"topic:{topic_name}"
@@ -307,20 +324,17 @@ def produce_to_topic(
                     detail="Cannot produce to topics that have connectors attached.",
                 )
 
-    bootstrap_servers = cluster.get("bootstrapServers")
-    if not bootstrap_servers:
+    if not cluster.get("bootstrapServers"):
         raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
 
     try:
-        return kafka_service.produce_message(
-            bootstrap_servers, topic_name, body.value, body.key
-        )
+        return kafka_service.produce_message(cluster, topic_name, body.value, body.key)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/clusters/{id}/connector/{connector_name}/details")
-def get_connector_details(id: int, connector_name: str, db: Session = Depends(get_db)):
+def get_connector_details(id: int, connector_name: str):
     """
     Fetch detailed configuration for a specific connector.
     Sensitive values are masked.
@@ -328,7 +342,7 @@ def get_connector_details(id: int, connector_name: str, db: Session = Depends(ge
     """
     from lib.kafka import kafka_service
     
-    cluster = get_cluster(db, id)
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     
@@ -345,14 +359,14 @@ def get_connector_details(id: int, connector_name: str, db: Session = Depends(ge
 
 
 @app.get("/api/clusters/{id}/consumer/{group_id}/lag")
-def get_consumer_lag(id: int, group_id: str, db: Session = Depends(get_db)):
+def get_consumer_lag(id: int, group_id: str):
     """
     Fetch consumer lag per partition for a specific consumer group.
     Called on-demand when user clicks on a consumer node.
     """
     from lib.kafka import kafka_service
     
-    cluster = get_cluster(db, id)
+    cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     
@@ -361,7 +375,7 @@ def get_consumer_lag(id: int, group_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
     
     try:
-        return kafka_service.fetch_consumer_lag(bootstrap_servers, group_id)
+        return kafka_service.fetch_consumer_lag(cluster, group_id)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

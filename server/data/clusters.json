@@ -1,0 +1,26 @@
+{
+  "clusters": [
+    {
+      "id": 1,
+      "name": "dev",
+      "bootstrapServers": "localhost:9092",
+      "schemaRegistryUrl": "http://localhost:8081",
+      "connectUrl": "http://localhost:8083",
+      "jmxHost": "localhost",
+      "jmxPort": 9999,
+      "createdAt": "2025-02-04T00:00:00Z",
+      "enableKafkaEventProduceFromUi": true,
+      "securityProtocol": "PLAINTEXT",
+      "sslEndpointIdentificationAlgorithm": "",
+      "sslTruststoreLocation": "/config/certs/client.truststore.jks",
+      "sslTruststorePassword": "pwd",
+      "sslTruststoreType": "jks",
+      "sslKeystoreLocation": "//config/certs/client.keystore.p12",
+      "sslKeystoreType": "pkcs12",
+      "sslKeystorePassword": "pwd",
+      "sslKeyPassword": "pwd",
+      "sslCaLocation": "/config/certs/ca.pem",
+      "enableSslCertificateVerification": true
+    }
+  ]
+}

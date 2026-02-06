@@ -2,8 +2,11 @@
 Fetch real Kafka cluster state: topics, consumer groups, connectors (optional), schemas (optional).
 Uses confluent-kafka AdminClient, Kafka Connect REST API, and Schema Registry REST API.
 """
+import hashlib
 import logging
 import os
+import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -16,24 +19,242 @@ from confluent_kafka._model import ConsumerGroupTopicPartitions
 
 logger = logging.getLogger(__name__)
 
+# Cache for JKS/P12 -> PEM conversion (temp dirs keyed by config hash so we reuse)
+_ssl_pem_cache: dict[str, tuple[tempfile.TemporaryDirectory, str | None, str | None, str | None]] = {}
+
+
+def _ssl_java_to_pem(cluster: dict) -> tuple[str | None, str | None, str | None]:
+    """
+    If cluster uses Java truststore/keystore (JKS/PKCS12), convert to PEM for librdkafka.
+    Returns (ca_pem_path, cert_pem_path, key_pem_path) or (None, None, None) if not used or conversion fails.
+    """
+    trust_loc = cluster.get("sslTruststoreLocation") or cluster.get("ssl_truststore_location")
+    trust_pw = cluster.get("sslTruststorePassword") or cluster.get("ssl_truststore_password")
+    key_loc = cluster.get("sslKeystoreLocation") or cluster.get("ssl_keystore_location")
+    key_type = (cluster.get("sslKeystoreType") or cluster.get("ssl_keystore_type") or "pkcs12").strip().lower()
+    key_pw = cluster.get("sslKeystorePassword") or cluster.get("ssl_keystore_password")
+    key_pass = cluster.get("sslKeyPassword") or cluster.get("ssl_key_password") or key_pw
+
+    if not trust_loc and not key_loc:
+        return (None, None, None)
+
+    cache_key = hashlib.sha256(
+        f"{trust_loc}:{trust_pw}:{key_loc}:{key_type}:{key_pw}".encode()
+    ).hexdigest()
+    if cache_key in _ssl_pem_cache:
+        _dir, ca, cert, key = _ssl_pem_cache[cache_key]
+        return (ca, cert, key)
+
+    tmp = tempfile.TemporaryDirectory(prefix="streamlens_ssl_")
+    ca_path: str | None = None
+    cert_path: str | None = None
+    key_path: str | None = None
+
+    try:
+        if trust_loc and Path(trust_loc).exists():
+            ca_path = os.path.join(tmp.name, "ca.pem")
+            try:
+                # List all aliases in the truststore (JKS can contain multiple CAs)
+                list_result = subprocess.run(
+                    [
+                        "keytool", "-list", "-keystore", trust_loc,
+                        "-storepass", trust_pw or "",
+                        "-v",
+                    ],
+                    capture_output=True, text=True, timeout=10,
+                )
+                if list_result.returncode != 0:
+                    logger.warning(
+                        "keytool list truststore failed (wrong password?): %s",
+                        (list_result.stderr or list_result.stdout or "")[:200],
+                    )
+                    ca_path = None
+                else:
+                    # Parse alias names: "Alias name: caroot" (with -v) or "caroot, Dec 1, 2024, trustedCertEntry" (without -v)
+                    aliases = []
+                    stdout = list_result.stdout or ""
+                    for line in stdout.splitlines():
+                        line = line.strip()
+                        if line.lower().startswith("alias name:"):
+                            aliases.append(line.split(":", 1)[1].strip())
+                    if not aliases:
+                        # Fallback: keytool -list without -v gives "alias, date, type" per line
+                        list_short = subprocess.run(
+                            ["keytool", "-list", "-keystore", trust_loc, "-storepass", trust_pw or ""],
+                            capture_output=True, text=True, timeout=10,
+                        )
+                        if list_short.returncode == 0:
+                            for line in (list_short.stdout or "").splitlines():
+                                line = line.strip()
+                                if line and "contains" not in line and "Keystore" not in line and "," in line:
+                                    aliases.append(line.split(",")[0].strip())
+                        aliases = list(dict.fromkeys(aliases))  # dedupe, keep order
+                    if not aliases:
+                        # Fallback: export single cert without -alias (first/default)
+                        subprocess.run(
+                            [
+                                "keytool", "-exportcert", "-rfc",
+                                "-keystore", trust_loc,
+                                "-storepass", trust_pw or "",
+                                "-file", ca_path,
+                            ],
+                            check=True, capture_output=True, timeout=10,
+                        )
+                    else:
+                        # Export every cert in the truststore and concatenate (broker CA might not be first)
+                        with open(ca_path, "w") as out:
+                            for i, alias in enumerate(aliases):
+                                part = os.path.join(tmp.name, f"ca_{i}.pem")
+                                try:
+                                    exp = subprocess.run(
+                                        [
+                                            "keytool", "-exportcert", "-rfc",
+                                            "-keystore", trust_loc,
+                                            "-storepass", trust_pw or "",
+                                            "-alias", alias,
+                                            "-file", part,
+                                        ],
+                                        capture_output=True, timeout=10,
+                                    )
+                                    if exp.returncode == 0 and os.path.exists(part):
+                                        with open(part) as f:
+                                            out.write(f.read())
+                                        out.write("\n")
+                                except Exception as e:
+                                    logger.debug("keytool export alias %s: %s", alias, e)
+                        if not os.path.exists(ca_path) or os.path.getsize(ca_path) == 0:
+                            logger.warning("Truststore export produced empty ca.pem (aliases: %s)", aliases)
+                            ca_path = None
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.warning("keytool truststore export failed: %s", e)
+                ca_path = None
+
+        if key_loc and Path(key_loc).exists() and key_type in ("pkcs12", "p12"):
+            cert_path = os.path.join(tmp.name, "cert.pem")
+            key_path = os.path.join(tmp.name, "key.pem")
+            pass_arg = (key_pw or key_pass or "").replace("'", "'\\''")
+            try:
+                subprocess.run(
+                    [
+                        "openssl", "pkcs12", "-in", key_loc,
+                        "-out", cert_path, "-nodes", "-clcerts",
+                        "-passin", f"pass:{pass_arg}",
+                    ],
+                    check=True, capture_output=True, timeout=10,
+                )
+                subprocess.run(
+                    [
+                        "openssl", "pkcs12", "-in", key_loc,
+                        "-out", key_path, "-nodes", "-nocerts",
+                        "-passin", f"pass:{pass_arg}",
+                    ],
+                    check=True, capture_output=True, timeout=10,
+                )
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.warning("openssl keystore export failed: %s", e)
+                cert_path = key_path = None
+
+        _ssl_pem_cache[cache_key] = (tmp, ca_path, cert_path, key_path)
+        return (ca_path, cert_path, key_path)
+    except Exception as e:
+        logger.warning("SSL Java->PEM conversion failed: %s", e)
+        return (None, None, None)
+
+
+def _client_config(cluster: dict) -> dict:
+    """
+    Build Kafka client config from cluster (bootstrap + optional SSL/security).
+    Supports PEM (sslCaLocation, sslCertificateLocation, sslKeyLocation) or Java-style
+    truststore/keystore (sslTruststoreLocation, sslKeystoreLocation with JKS/PKCS12);
+    the latter are converted to PEM for librdkafka.
+    """
+    bootstrap = (cluster.get("bootstrapServers") or cluster.get("bootstrap_servers") or "").strip()
+    bootstrap_list = [s.strip() for s in bootstrap.split(",") if s.strip()]
+    cfg = {"bootstrap.servers": ",".join(bootstrap_list)}
+    protocol = cluster.get("securityProtocol") or cluster.get("security_protocol") or ""
+    if protocol:
+        cfg["security.protocol"] = protocol.strip()
+
+    # Endpoint identification (empty string = disable hostname verification)
+    # Use 'in' check instead of 'or' because empty string "" is a valid value (means "disable")
+    ep_algo = None
+    if "sslEndpointIdentificationAlgorithm" in cluster:
+        ep_algo = cluster["sslEndpointIdentificationAlgorithm"]
+    elif "ssl_endpoint_identification_algorithm" in cluster:
+        ep_algo = cluster["ssl_endpoint_identification_algorithm"]
+    if ep_algo is not None:
+        # librdkafka uses "none" to disable (Java client uses ""); normalize
+        val = str(ep_algo).strip()
+        if val == "" or val.lower() == "none":
+            val = "none"
+        cfg["ssl.endpoint.identification.algorithm"] = val
+        logger.info("SSL endpoint identification algorithm: %r", val)
+
+    # Optional: disable certificate verification (dev/self-signed only; insecure)
+    skip_verify = cluster.get("enableSslCertificateVerification") is False or cluster.get("enable_ssl_certificate_verification") is False
+    if skip_verify:
+        cfg["enable.ssl.certificate.verification"] = "false"
+        logger.info("SSL certificate verification disabled for cluster (insecure; dev only)")
+
+    # CA: prefer explicit sslCaLocation (PEM path), else truststore conversion
+    ca_explicit = (
+        cluster.get("sslCaLocation")
+        or cluster.get("ssl_ca_location")
+        or cluster.get("ssl.ca.location")
+    )
+    ca_pem, cert_pem, key_pem = _ssl_java_to_pem(cluster)
+    if ca_explicit:
+        cfg["ssl.ca.location"] = ca_explicit.strip()
+        logger.info("SSL CA from sslCaLocation: %s", ca_explicit.strip())
+    elif ca_pem:
+        cfg["ssl.ca.location"] = ca_pem
+        logger.info("SSL CA from truststore: %s", ca_pem)
+
+    if protocol and protocol.upper() in ("SSL", "SASL_SSL") and "ssl.ca.location" not in cfg and not skip_verify:
+        logger.warning(
+            "SSL is enabled but no CA is configured (ssl.ca.location missing). "
+            "Set sslTruststoreLocation/sslTruststorePassword or sslCaLocation in clusters.json, "
+            "or set enableSslCertificateVerification to false for dev only (insecure)."
+        )
+
+    if cert_pem and key_pem:
+        cfg["ssl.certificate.location"] = cert_pem
+        cfg["ssl.key.location"] = key_pem
+        key_pw = cluster.get("sslKeyPassword") or cluster.get("ssl_key_password")
+        if key_pw:
+            cfg["ssl.key.password"] = key_pw
+    else:
+        cert = cluster.get("sslCertificateLocation") or cluster.get("ssl_certificate_location")
+        if cert:
+            cfg["ssl.certificate.location"] = cert.strip()
+        key = cluster.get("sslKeyLocation") or cluster.get("ssl_key_location")
+        if key:
+            cfg["ssl.key.location"] = key.strip()
+        key_pw = cluster.get("sslKeyPassword") or cluster.get("ssl_key_password")
+        if key_pw:
+            cfg["ssl.key.password"] = key_pw
+    return cfg
+
 
 class KafkaService:
     """Fetches real cluster state from Kafka broker, Connect, and Schema Registry."""
 
-    def check_cluster_health(self, bootstrap_servers: str) -> dict[str, Any]:
+    def check_cluster_health(self, cluster: dict[str, Any]) -> dict[str, Any]:
         """
         Check if Kafka cluster is reachable and detect controller mode.
+        cluster: dict with bootstrapServers and optional securityProtocol, sslCaLocation, etc.
         Returns: {"online": bool, "error": str | None, "clusterMode": "kraft" | "zookeeper" | None}
         """
-        if not bootstrap_servers:
+        bootstrap = cluster.get("bootstrapServers") or ""
+        if not bootstrap:
             return {"online": False, "error": "No bootstrap servers configured", "clusterMode": None}
 
-        bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
+        bootstrap_list = [s.strip() for s in bootstrap.split(",") if s.strip()]
         if not bootstrap_list:
             return {"online": False, "error": "Invalid bootstrap servers", "clusterMode": None}
 
         try:
-            admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
+            admin = AdminClient(_client_config(cluster))
             metadata = admin.list_topics(timeout=5)
             if metadata is not None:
                 # KRaft clusters expose __cluster_metadata in topic list; Zookeeper mode does not
@@ -63,6 +284,7 @@ class KafkaService:
         if not bootstrap_list:
             return self._empty_state()
 
+        client_cfg = _client_config(cluster)
         state: dict[str, Any] = {
             "topics": [],
             "producers": [],
@@ -74,11 +296,11 @@ class KafkaService:
         }
 
         try:
-            admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
+            admin = AdminClient(client_cfg)
             # Real topics from broker
             state["topics"] = self._fetch_topics(admin)
             # Consumer groups -> consumers (group id, consumes from topics)
-            state["consumers"] = self._fetch_consumer_groups(admin, ",".join(bootstrap_list))
+            state["consumers"] = self._fetch_consumer_groups(admin, client_cfg)
             
             # Producers: Try multiple sources
             producers = []
@@ -161,8 +383,8 @@ class KafkaService:
             raise
         return topics
 
-    def _fetch_consumer_groups(self, admin: AdminClient, bootstrap_servers: str) -> list[dict[str, Any]]:
-        """Fetch consumer groups and the topics they consume from (auto-discovered)."""
+    def _fetch_consumer_groups(self, admin: AdminClient, client_cfg: dict) -> list[dict[str, Any]]:
+        """Fetch consumer groups and the topics they consume from (auto-discovered). client_cfg is used for temp Consumer."""
         consumers = []
         try:
             from confluent_kafka import Consumer, TopicPartition
@@ -236,7 +458,7 @@ class KafkaService:
                     try:
                         # Create a temporary consumer to query offsets
                         temp_consumer = Consumer({
-                            'bootstrap.servers': bootstrap_servers,
+                            **client_cfg,
                             'group.id': f'_temp_query_{group_id}',  # Different group to avoid conflicts
                             'enable.auto.commit': False,
                         })
@@ -752,14 +974,16 @@ class KafkaService:
             logger.error(f"Failed to fetch schema for {subject}: {e}")
             raise RuntimeError(f"Schema not found: {subject}") from e
     
-    def fetch_topic_details(self, bootstrap_servers: str, topic_name: str, include_messages: bool = False) -> dict[str, Any]:
+    def fetch_topic_details(self, cluster: dict[str, Any], topic_name: str, include_messages: bool = False) -> dict[str, Any]:
         """
         Fetch detailed configuration and recent messages for a specific topic.
+        cluster: dict with bootstrapServers and optional SSL/security fields.
         Returns: topic config + last 5 messages
         """
         try:
-            bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
-            admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
+            client_cfg = _client_config(cluster)
+            bootstrap_list = [s.strip() for s in (cluster.get("bootstrapServers") or "").split(",") if s.strip()]
+            admin = AdminClient(client_cfg)
             
             logger.info(f"Fetching details for topic: {topic_name}")
             
@@ -824,7 +1048,7 @@ class KafkaService:
             if include_messages:
                 try:
                     temp_consumer = Consumer({
-                        'bootstrap.servers': ",".join(bootstrap_list),
+                        **client_cfg,
                         'group.id': f'streamlens-viewer-{os.getpid()}',
                         'enable.auto.commit': False,
                         'auto.offset.reset': 'latest',  # Start from end
@@ -896,22 +1120,23 @@ class KafkaService:
             raise RuntimeError(f"Could not fetch topic details: {str(e)}") from e
 
     def produce_message(
-        self, bootstrap_servers: str, topic_name: str, value: str, key: str | None = None
+        self, cluster: dict[str, Any], topic_name: str, value: str, key: str | None = None
     ) -> dict[str, Any]:
         """
         Produce a single message to a topic. Value and optional key are sent as UTF-8.
+        cluster: dict with bootstrapServers and optional SSL/security fields.
         Rejects internal topics (names starting with _, e.g. __consumer_offsets, _schemas).
         Returns: {"ok": True, "partition": int, "offset": int} or raises RuntimeError.
         """
         name = (topic_name or "").strip()
         if not name or name.startswith("_"):
             raise RuntimeError("Cannot produce to internal topics (names starting with _)")
-        bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
+        bootstrap_list = [s.strip() for s in (cluster.get("bootstrapServers") or "").split(",") if s.strip()]
         if not bootstrap_list:
             raise RuntimeError("No bootstrap servers configured")
         try:
             producer = Producer({
-                "bootstrap.servers": ",".join(bootstrap_list),
+                **_client_config(cluster),
                 "client.id": "streamlens-ui-producer",
             })
             value_bytes = value.encode("utf-8")
@@ -943,14 +1168,16 @@ class KafkaService:
             logger.exception("Produce failed for topic %s: %s", topic_name, e)
             raise RuntimeError(f"Produce failed: {str(e)}") from e
 
-    def fetch_consumer_lag(self, bootstrap_servers: str, group_id: str) -> dict[str, Any]:
+    def fetch_consumer_lag(self, cluster: dict[str, Any], group_id: str) -> dict[str, Any]:
         """
         Fetch consumer lag per partition for a specific consumer group.
+        cluster: dict with bootstrapServers and optional SSL/security fields.
         Returns: {"topics": {"topic_name": {"partitions": [{"partition": 0, "currentOffset": 100, "logEndOffset": 150, "lag": 50}]}}}
         """
         try:
-            bootstrap_list = [s.strip() for s in bootstrap_servers.split(",") if s.strip()]
-            admin = AdminClient({"bootstrap.servers": ",".join(bootstrap_list)})
+            client_cfg = _client_config(cluster)
+            bootstrap_list = [s.strip() for s in (cluster.get("bootstrapServers") or "").split(",") if s.strip()]
+            admin = AdminClient(client_cfg)
             
             logger.info(f"Fetching consumer lag for group: {group_id}")
             
@@ -990,7 +1217,7 @@ class KafkaService:
                         temp_consumer = None
                         try:
                             temp_consumer = Consumer({
-                                'bootstrap.servers': ",".join(bootstrap_list),
+                                **client_cfg,
                                 'group.id': f'streamlens-lag-{os.getpid()}',
                                 'enable.auto.commit': False,
                                 'socket.timeout.ms': 5000,

@@ -5,10 +5,10 @@ BOOTSTRAP="localhost:9092"
 SCHEMA_REGISTRY="http://localhost:8081"
 
 # Toggle features on/off
-CREATE_TOPICS=false       # set to false to skip topic creation
+CREATE_TOPICS=true       # set to false to skip topic creation
 START_PRODUCERS=false     # set to false to skip starting producers
 START_CONSUMERS=false     # set to false to skip starting consumers
-REGISTER_SCHEMAS=true   # set to false to skip registering schemas
+REGISTER_SCHEMAS=false   # set to false to skip registering schemas
 
 # Performance tuning - adjust based on your system resources
 # ⚠️  Default settings are optimized for local development
@@ -27,6 +27,7 @@ mkdir -p logs
 # Reduced list of topics for demo (8 topics -> 4 producers/consumers)
 # Increase this list if you need more data
 TOPICS=(
+accounts-ledger-topic
 customer-accounts-topic
 transactions-topic
 payments-topic
@@ -35,6 +36,17 @@ loans-applications-topic
 notifications-topic
 fraud-detection-topic
 audit-log-topic
+investments-rebalancing-topic
+investments-recommendations-topic
+treasury-forex-topic
+treasury-hedging-topic
+notifications-preferences-topic
+support-updates-topic
+mortgage-payments-topic
+atm-cash-levels-topic
+atm-faults-topic
+compliance-reports-topic
+trading-positions-topic
 )
 
 # -------------------------------

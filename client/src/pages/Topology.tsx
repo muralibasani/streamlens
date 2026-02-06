@@ -27,15 +27,36 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-// Helper for auto-layout using Dagre
+const NODE_WIDTH = 220;
+const NODE_HEIGHT = 100;
+const GRID_COLS = 8;
+const MAX_NODES_FOR_DAGRE = 1500;
+
+function getGridLayoutedNodes(nodes: any[]): any[] {
+  return nodes.map((node, i) => {
+    const col = i % GRID_COLS;
+    const row = Math.floor(i / GRID_COLS);
+    return {
+      ...node,
+      position: { x: col * (NODE_WIDTH + 40), y: row * (NODE_HEIGHT + 24) },
+    };
+  });
+}
+
+// Helper for auto-layout using Dagre (or grid fallback for very large graphs)
 const getLayoutedElements = (nodes: any[], edges: any[], direction = "LR") => {
+  if (nodes.length > MAX_NODES_FOR_DAGRE) {
+    return {
+      nodes: getGridLayoutedNodes(nodes),
+      edges,
+    };
+  }
   const g = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: direction });
 
   edges.forEach((edge) => g.setEdge(edge.source, edge.target));
   nodes.forEach((node) => {
-    // Width/Height needs to match the Node component dimensions roughly
-    g.setNode(node.id, { width: 220, height: 100 });
+    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
   });
 
   dagre.layout(g);
@@ -532,6 +553,18 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
             <RefreshCw className={`w-4 h-4 mr-2 ${refreshTopology.isPending ? 'animate-spin' : ''}`} />
             Retry Connection
           </Button>
+        </div>
+      )}
+
+      {/* Large cluster notice: topology capped for performance */}
+      {(snapshot?.data as any)?._meta && (
+        <div className="shrink-0 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-sm text-amber-800 dark:text-amber-200 flex items-center justify-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            Showing <strong>{(snapshot?.data as any)._meta.shownTopicCount.toLocaleString()}</strong> of{" "}
+            <strong>{(snapshot?.data as any)._meta.totalTopicCount.toLocaleString()}</strong> topics
+            (capped for performance). Use search to find specific topics.
+          </span>
         </div>
       )}
 

@@ -1,22 +1,13 @@
-import { useState } from "react";
 import { Link } from "wouter";
-import { useClusters, useDeleteCluster, useClusterHealth } from "@/hooks/use-kafka";
-import { CreateClusterDialog } from "@/components/CreateClusterDialog";
-import { EditClusterDialog } from "@/components/EditClusterDialog";
+import { useClusters, useClusterHealth } from "@/hooks/use-kafka";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Server, Activity, Trash2, ArrowRight, Database, Edit, XCircle, ArrowRightLeft, Shield, Sparkles } from "lucide-react";
+import { Server, ArrowRight, Database, XCircle, ArrowRightLeft, Shield, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 
-function ClusterCard({ cluster, onEdit, onDelete }: { cluster: any; onEdit: (cluster: any) => void; onDelete: (id: number) => void }) {
+function ClusterCard({ cluster }: { cluster: any }) {
   const { data: health } = useClusterHealth(cluster.id);
 
   return (
@@ -59,26 +50,6 @@ function ClusterCard({ cluster, onEdit, onDelete }: { cluster: any; onEdit: (clu
                 </div>
               </div>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-xl border-border bg-card/95 backdrop-blur-sm">
-                <DropdownMenuItem className="cursor-pointer rounded-lg" onClick={() => onEdit(cluster)}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edit Cluster
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer rounded-lg text-destructive focus:text-destructive focus:bg-destructive/10"
-                  onClick={() => onDelete(cluster.id)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Cluster
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
           <CardDescription className="mt-3 space-y-2">
             <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-muted-foreground" title={cluster.bootstrapServers}>
@@ -127,8 +98,6 @@ function ClusterCard({ cluster, onEdit, onDelete }: { cluster: any; onEdit: (clu
 export default function Dashboard() {
   const { data: clusters, isLoading, error } = useClusters();
   const showEmptyState = error || !clusters?.length;
-  const deleteCluster = useDeleteCluster();
-  const [editingCluster, setEditingCluster] = useState<any>(null);
 
   if (isLoading) {
     return (
@@ -176,7 +145,6 @@ export default function Dashboard() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <ThemeToggle />
-            <CreateClusterDialog />
           </div>
         </motion.header>
 
@@ -191,13 +159,10 @@ export default function Dashboard() {
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted/50 ring-1 ring-border/60">
               <Server className="h-10 w-10 text-muted-foreground/70" />
             </div>
-            <h2 className="mt-6 text-xl font-semibold sm:text-2xl">your first cluster</h2>
+            <h2 className="mt-6 text-xl font-semibold sm:text-2xl">No clusters configured</h2>
             <p className="mt-2 max-w-sm text-muted-foreground">
-              Connect a Kafka cluster to visualize topics, consumers, producers, and data flow.
+              Add clusters to <code className="rounded bg-muted px-1.5 py-0.5 text-xs">server/data/clusters.json</code> and restart the server.
             </p>
-            <div className="mt-8">
-              <CreateClusterDialog />
-            </div>
           </motion.section>
         ) : (
           <motion.section
@@ -220,29 +185,12 @@ export default function Dashboard() {
             </div>
             <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
               {clusters?.map((cluster) => (
-                <ClusterCard
-                  key={cluster.id}
-                  cluster={cluster}
-                  onEdit={setEditingCluster}
-                  onDelete={(id) => {
-                    if (confirm("Delete this cluster? This cannot be undone.")) {
-                      deleteCluster.mutate(id);
-                    }
-                  }}
-                />
+                <ClusterCard key={cluster.id} cluster={cluster} />
               ))}
             </div>
           </motion.section>
         )}
       </div>
-
-      {editingCluster && (
-        <EditClusterDialog
-          open={!!editingCluster}
-          onOpenChange={(open) => !open && setEditingCluster(null)}
-          cluster={editingCluster}
-        />
-      )}
     </div>
   );
 }
