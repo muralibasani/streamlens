@@ -75,8 +75,31 @@ This makes StreamLens safe to use in production environments for monitoring and 
 
 ## Environment
 
-- **server**: `DATABASE_URL` (optional; default: SQLite at `server/topology.db`; use `postgresql://...` and `uv sync --extra postgres` to switch to PostgreSQL). Optional for AI chat: **OpenAI** — `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL`; **Gemini** — `AI_PROVIDER=gemini`, `AI_INTEGRATIONS_GEMINI_API_KEY` (`uv sync --extra gemini`); **Anthropic** — `AI_PROVIDER=anthropic`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY` (`uv sync --extra anthropic`); **Ollama** (local) — `AI_PROVIDER=ollama`, optional `OLLAMA_BASE_URL`, `OLLAMA_MODEL`. See [docs/AI_SETUP.md](docs/AI_SETUP.md).
+- **server**: Cluster list is stored in a **JSON file** (no database). Default path: `server/data/clusters.json`. Override with `CLUSTERS_JSON` (e.g. `/etc/streamlens/clusters.json`). An admin can edit this file and restart the server to add/remove clusters—no login or DB setup. Topology snapshots are kept in memory (refreshed on Sync or every minute). `TOPOLOGY_MAX_TOPICS` (optional; default `2000`) — cap on topic nodes for very large clusters. Optional for AI chat: **OpenAI** — `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL`; **Gemini** — `AI_PROVIDER=gemini`, `AI_INTEGRATIONS_GEMINI_API_KEY` (`uv sync --extra gemini`); **Anthropic** — `AI_PROVIDER=anthropic`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY` (`uv sync --extra anthropic`); **Ollama** (local) — `AI_PROVIDER=ollama`, optional `OLLAMA_BASE_URL`, `OLLAMA_MODEL`. See [docs/AI_SETUP.md](docs/AI_SETUP.md).
 - **client**: `VITE_API_URL` (optional, default `http://localhost:5000` for proxy target).
+
+### Cluster configuration (JSON)
+
+Edit `server/data/clusters.json` (or the path set by `CLUSTERS_JSON`) to manage clusters without the UI. Restart the server after changes. Example:
+
+```json
+{
+  "clusters": [
+    {
+      "id": 1,
+      "name": "Production",
+      "bootstrapServers": "localhost:9092",
+      "schemaRegistryUrl": "http://localhost:8081",
+      "connectUrl": "http://localhost:8083",
+      "jmxHost": null,
+      "jmxPort": null,
+      "createdAt": "2025-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+Use unique `id` values (integers). You can also add clusters via the UI; they are written to the same file.
 
 ## Topology: Auto-Discovery
 

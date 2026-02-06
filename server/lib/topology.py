@@ -1,8 +1,17 @@
+import os
+import random
+from typing import Any
+
 from .kafka import kafka_service
+
+DEFAULT_MAX_TOPICS = 2000
 
 
 def build_topology(cluster_id: int, cluster: dict) -> dict:
-    """Build topology graph from real cluster state."""
+    """Build topology graph from real cluster state.
+    When the cluster has more than TOPOLOGY_MAX_TOPICS topics, only a subset is included
+    (all connected topics + a random sample of the rest) to avoid OOM and browser freezes.
+    """
     try:
         state = kafka_service.fetch_system_state(cluster)
     except Exception:
@@ -10,15 +19,51 @@ def build_topology(cluster_id: int, cluster: dict) -> dict:
 
     nodes = []
     edges = []
+    all_broker_topics = {t["name"] for t in state["topics"]}
+    total_topic_count = len(state["topics"])
 
-    # Topic nodes from cluster
-    topic_names = {t["name"] for t in state["topics"]}
+    # Topics referenced by producers, consumers, streams, connectors, or ACLs (always include these)
+    connected = set()
+    for s in state["streams"]:
+        connected.update((s.get("consumesFrom") or []) + (s.get("producesTo") or []))
+    for p in state["producers"]:
+        connected.update(p.get("producesTo") or [])
+    for c in state["consumers"]:
+        connected.update(c.get("consumesFrom") or [])
+    for c in state.get("connectors", []):
+        t = c.get("topic")
+        if t and t != "?":
+            connected.add(t)
+    for a in state.get("acls", []):
+        t = a.get("topic")
+        if t:
+            connected.add(t)
+
+    max_topics = int(os.environ.get("TOPOLOGY_MAX_TOPICS", str(DEFAULT_MAX_TOPICS)))
+    if max_topics < 1:
+        max_topics = DEFAULT_MAX_TOPICS
+
+    if total_topic_count <= max_topics:
+        topics_to_show = all_broker_topics
+        meta = None
+    else:
+        connected_in_broker = connected & all_broker_topics
+        others = list(all_broker_topics - connected_in_broker)
+        sample_size = max(0, max_topics - len(connected_in_broker))
+        shown_others = set(random.sample(others, min(sample_size, len(others)))) if others else set()
+        topics_to_show = connected_in_broker | shown_others
+        meta = {"totalTopicCount": total_topic_count, "shownTopicCount": len(topics_to_show)}
+
+    topic_names = set(topics_to_show)
     for t in state["topics"]:
+        name = t["name"]
+        if name not in topics_to_show:
+            continue
         topic_data = {
-            "label": t["name"],
-            "details": t
+            "label": name,
+            "details": t,
         }
-        nodes.append({"id": f"topic:{t['name']}", "type": "topic", "data": topic_data})
+        nodes.append({"id": f"topic:{name}", "type": "topic", "data": topic_data})
 
     # Ensure topic nodes exist for topics referenced by streams, producers, and consumers
     # This handles cases where topics appear in JMX/ACLs/connectors but not in broker metadata
@@ -212,4 +257,7 @@ def build_topology(cluster_id: int, cluster: dict) -> dict:
                 "style": {"strokeDasharray": "3,3", "stroke": "#60a5fa"}
             })
 
-    return {"nodes": nodes, "edges": edges}
+    result = {"nodes": nodes, "edges": edges}
+    if meta is not None:
+        result["_meta"] = meta
+    return result

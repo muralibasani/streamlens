@@ -83,9 +83,39 @@ def _get_gemini_model():
     return _gemini_model
 
 
-SYSTEM_PROMPT = "You are a helpful Kafka expert."
+SYSTEM_PROMPT = "You are a helpful Kafka expert. You are read-only: you must never create, update, or delete any Kafka resources (topics, consumers, producers, connectors, schemas, ACLs). If the user asks you to do any of these, decline politely and explain that StreamPilot is read-only."
+
+# Phrases that indicate a mutating request (create/update/delete) — decline without calling the LLM
+_MUTATING_PATTERNS = [
+    r"\b(delete|remove|drop)\b.*\b(topic|consumer|producer|connector|schema|acl)\b",
+    r"\b(topic|consumer|producer|connector|schema|acl)\b.*\b(delete|remove|drop)\b",
+    r"\b(create|add|new)\b.*\b(topic|consumer|producer|connector|schema|acl)\b",
+    r"\b(topic|consumer|producer|connector|schema|acl)\b.*\b(create|add)\b",
+    r"\b(update|change|modify|alter)\b.*\b(topic|consumer|producer|connector|schema|acl)\b",
+    r"\b(topic|consumer|producer|connector|schema|acl)\b.*\b(update|change|modify)\b",
+    r"\b(produce|send|write)\s+(a\s+)?(message|event)\b",  # "produce a message" = write to topic
+    r"\b(clear|reset|purge)\b.*\b(topic|offset|consumer)\b",
+    r"\b(revoke|grant)\b.*\b(acl|permission)\b",
+]
+_MUTATING_RE = re.compile("|".join(f"({p})" for p in _MUTATING_PATTERNS), re.IGNORECASE)
+
+READ_ONLY_DECLINE = {
+    "answer": "StreamPilot is read-only. I can only answer questions about your current topology (e.g. which producers write to a topic, which consumers read from it, schemas, connectors). I cannot create, update, or delete topics, consumers, producers, connectors, schemas, or ACLs. To make changes, use your Kafka tools (kafka-topics.sh, kafka-consumer-groups.sh, Connect REST API, etc.) or your admin console.",
+    "highlightNodes": [],
+}
+
+
+def _is_mutating_request(question: str) -> bool:
+    """Return True if the question asks to create, update, or delete any Kafka resource."""
+    if not (question or "").strip():
+        return False
+    q = question.strip()
+    return bool(_MUTATING_RE.search(q))
+
+
 PROMPT_TEMPLATE = """
-You are StreamPilot, a Kafka topology reasoning assistant.
+You are StreamPilot, a Kafka topology reasoning assistant. You are READ-ONLY: you must not create, update, or delete any topics, consumers, producers, connectors, schemas, or ACLs. If the user asks you to do any of these, respond with a short polite decline and say you can only answer questions about the current topology.
+
 You are given a graph with nodes and edges representing Kafka topics, producers, consumers, streams applications, connectors, and schemas.
 
 Current Topology Graph JSON:
@@ -182,6 +212,8 @@ def _query_ollama(question: str, topology: dict) -> dict:
 
 
 def query_topology(question: str, topology: dict) -> dict:
+    if _is_mutating_request(question):
+        return dict(READ_ONLY_DECLINE)
     provider = _get_provider()
     try:
         if provider == "gemini":
