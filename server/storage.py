@@ -60,8 +60,8 @@ def _bool_from(val) -> bool:
 
 
 def _cluster_from_row(c: dict) -> dict:
-    """Normalize to API shape (camelCase, createdAt). Per-cluster enableKafkaEventProduceFromUi."""
-    return {
+    """Normalize to API shape (camelCase, createdAt). Per-cluster enableKafkaEventProduceFromUi and optional SSL."""
+    out = {
         "id": c["id"],
         "name": c["name"],
         "bootstrapServers": c.get("bootstrapServers") or c.get("bootstrap_servers") or "",
@@ -74,6 +74,33 @@ def _cluster_from_row(c: dict) -> dict:
             c.get("enableKafkaEventProduceFromUi") or c.get("enable_kafka_event_produce_from_ui")
         ),
     }
+    # Optional SSL / security (for connecting on port 9093 SSL, etc.)
+    if c.get("securityProtocol") or c.get("security_protocol"):
+        out["securityProtocol"] = c.get("securityProtocol") or c.get("security_protocol")
+    if c.get("sslCaLocation") or c.get("ssl_ca_location") or c.get("ssl.ca.location"):
+        out["sslCaLocation"] = c.get("sslCaLocation") or c.get("ssl_ca_location") or c.get("ssl.ca.location")
+    if c.get("sslCertificateLocation") or c.get("ssl_certificate_location"):
+        out["sslCertificateLocation"] = c.get("sslCertificateLocation") or c.get("ssl_certificate_location")
+    if c.get("sslKeyLocation") or c.get("ssl_key_location"):
+        out["sslKeyLocation"] = c.get("sslKeyLocation") or c.get("ssl_key_location")
+    if c.get("sslKeyPassword") or c.get("ssl_key_password"):
+        out["sslKeyPassword"] = c.get("sslKeyPassword") or c.get("ssl_key_password")
+    if c.get("sslTruststoreLocation") or c.get("ssl_truststore_location"):
+        out["sslTruststoreLocation"] = c.get("sslTruststoreLocation") or c.get("ssl_truststore_location")
+    if c.get("sslTruststorePassword") or c.get("ssl_truststore_password"):
+        out["sslTruststorePassword"] = c.get("sslTruststorePassword") or c.get("ssl_truststore_password")
+    if c.get("sslKeystoreLocation") or c.get("ssl_keystore_location"):
+        out["sslKeystoreLocation"] = c.get("sslKeystoreLocation") or c.get("ssl_keystore_location")
+    if c.get("sslKeystoreType") or c.get("ssl_keystore_type"):
+        out["sslKeystoreType"] = c.get("sslKeystoreType") or c.get("ssl_keystore_type")
+    if c.get("sslKeystorePassword") or c.get("ssl_keystore_password"):
+        out["sslKeystorePassword"] = c.get("sslKeystorePassword") or c.get("ssl_keystore_password")
+    if "sslEndpointIdentificationAlgorithm" in c or "ssl_endpoint_identification_algorithm" in c:
+        out["sslEndpointIdentificationAlgorithm"] = c.get("sslEndpointIdentificationAlgorithm") or c.get("ssl_endpoint_identification_algorithm") or ""
+    if "enableSslCertificateVerification" in c or "enable_ssl_certificate_verification" in c:
+        val = c.get("enableSslCertificateVerification") if c.get("enableSslCertificateVerification") is not None else c.get("enable_ssl_certificate_verification")
+        out["enableSslCertificateVerification"] = val if val is not None else True
+    return out
 
 
 def get_clusters() -> list[dict]:
@@ -145,6 +172,18 @@ def update_cluster(
                 "jmxPort": jmx_port,
                 "createdAt": existing.get("createdAt") or existing.get("created_at") or "",
                 "enableKafkaEventProduceFromUi": enable_kafka_event_produce_from_ui,
+                "securityProtocol": existing.get("securityProtocol") or existing.get("security_protocol"),
+                "sslCaLocation": existing.get("sslCaLocation") or existing.get("ssl_ca_location"),
+                "sslCertificateLocation": existing.get("sslCertificateLocation") or existing.get("ssl_certificate_location"),
+                "sslKeyLocation": existing.get("sslKeyLocation") or existing.get("ssl_key_location"),
+                "sslKeyPassword": existing.get("sslKeyPassword") or existing.get("ssl_key_password"),
+                "sslTruststoreLocation": existing.get("sslTruststoreLocation") or existing.get("ssl_truststore_location"),
+                "sslTruststorePassword": existing.get("sslTruststorePassword") or existing.get("ssl_truststore_password"),
+                "sslKeystoreLocation": existing.get("sslKeystoreLocation") or existing.get("ssl_keystore_location"),
+                "sslKeystoreType": existing.get("sslKeystoreType") or existing.get("ssl_keystore_type"),
+                "sslKeystorePassword": existing.get("sslKeystorePassword") or existing.get("ssl_keystore_password"),
+                "sslEndpointIdentificationAlgorithm": existing.get("sslEndpointIdentificationAlgorithm") or existing.get("ssl_endpoint_identification_algorithm"),
+                "enableSslCertificateVerification": existing.get("enableSslCertificateVerification") if existing.get("enableSslCertificateVerification") is not None else existing.get("enable_ssl_certificate_verification"),
             }
             _write_clusters(clusters)
             return _cluster_from_row(clusters[i])

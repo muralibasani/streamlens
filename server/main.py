@@ -111,7 +111,7 @@ def cluster_health(id: int):
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     
-    health = kafka_service.check_cluster_health(cluster.get("bootstrapServers", ""))
+    health = kafka_service.check_cluster_health(cluster)
     return {
         "clusterId": id,
         "online": health["online"],
@@ -283,12 +283,11 @@ def get_topic_details(id: int, topic_name: str, include_messages: bool = False):
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     
-    bootstrap_servers = cluster.get("bootstrapServers")
-    if not bootstrap_servers:
+    if not cluster.get("bootstrapServers"):
         raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
     
     try:
-        return kafka_service.fetch_topic_details(bootstrap_servers, topic_name, include_messages)
+        return kafka_service.fetch_topic_details(cluster, topic_name, include_messages)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -325,14 +324,11 @@ def produce_to_topic(id: int, topic_name: str, body: ProduceMessageBody):
                     detail="Cannot produce to topics that have connectors attached.",
                 )
 
-    bootstrap_servers = cluster.get("bootstrapServers")
-    if not bootstrap_servers:
+    if not cluster.get("bootstrapServers"):
         raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
 
     try:
-        return kafka_service.produce_message(
-            bootstrap_servers, topic_name, body.value, body.key
-        )
+        return kafka_service.produce_message(cluster, topic_name, body.value, body.key)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -379,7 +375,7 @@ def get_consumer_lag(id: int, group_id: str):
         raise HTTPException(status_code=400, detail="Bootstrap servers not configured")
     
     try:
-        return kafka_service.fetch_consumer_lag(bootstrap_servers, group_id)
+        return kafka_service.fetch_consumer_lag(cluster, group_id)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

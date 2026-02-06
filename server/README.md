@@ -9,10 +9,7 @@ cd server
 uv sync   # or: pip install -e .
 ```
 
-**Database** (configurable via `DATABASE_URL`):
-
-- **Default**: embedded SQLite at `server/topology.db` (no setup).
-- **PostgreSQL**: set `DATABASE_URL=postgresql://user:pass@host/dbname` and install the driver: `uv sync --extra postgres`.
+**Clusters** are stored in `data/clusters.json` (no database). Override path with `CLUSTERS_JSON`. See project README for cluster and optional SSL config.
 
 Optional: `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL` for AI query.
 

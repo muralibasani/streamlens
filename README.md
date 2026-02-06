@@ -101,6 +101,52 @@ Edit `server/data/clusters.json` (or the path set by `CLUSTERS_JSON`) to manage 
 
 Use unique `id` values (integers). You can also add clusters via the UI; they are written to the same file.
 
+**SSL / TLS (e.g. port 9093):** To connect to Kafka over SSL, add optional fields to the cluster object:
+
+- `securityProtocol` — `"SSL"`, `"SASL_SSL"`, `"PLAINTEXT"` (default), or `"SASL_PLAINTEXT"`
+- `sslEndpointIdentificationAlgorithm` — Set to `""` (empty string) to disable hostname verification (e.g. for self-signed or dev); omit or use `"https"` for default verification.
+- **PEM-style** (librdkafka): `sslCaLocation`, `sslCertificateLocation`, `sslKeyLocation`, `sslKeyPassword` — paths to PEM files.
+- **Java-style truststore/keystore** (converted to PEM internally; requires `keytool` and `openssl` on the server host):
+  - `sslTruststoreLocation` — Path to JKS truststore (e.g. `client.truststore.jks`)
+  - `sslTruststorePassword` — Truststore password
+  - `sslKeystoreLocation` — Path to keystore (e.g. `client.keystore.p12`)
+  - `sslKeystoreType` — `pkcs12` or `p12`
+  - `sslKeystorePassword` — Keystore password
+  - `sslKeyPassword` — Key password (if different)
+- `enableSslCertificateVerification` — Set to `false` to **disable broker certificate verification** (dev/self-signed only; **insecure**). Use only when the broker uses a self-signed cert and you cannot get verification working with the truststore/PEM CA.
+
+Example for SSL on port 9093 with Java-style truststore/keystore:
+
+```json
+{
+  "id": 2,
+  "name": "prod-ssl",
+  "bootstrapServers": "broker1:9093,broker2:9093",
+  "securityProtocol": "SSL",
+  "sslEndpointIdentificationAlgorithm": "",
+  "sslTruststoreLocation": "/path/to/client.truststore.jks",
+  "sslTruststorePassword": "your-truststore-password",
+  "sslKeystoreLocation": "/path/to/client.keystore.p12",
+  "sslKeystoreType": "pkcs12",
+  "sslKeystorePassword": "your-keystore-password",
+  "sslKeyPassword": "your-key-password"
+}
+```
+
+Example with PEM only (no client cert):
+
+```json
+{
+  "bootstrapServers": "broker1:9093",
+  "securityProtocol": "SSL",
+  "sslCaLocation": "/path/to/ca-cert.pem"
+}
+```
+
+Leave `securityProtocol` unset (or `PLAINTEXT`) for plaintext port 9092.
+
+**If you still see "certificate verify failed":** Either (1) set `enableSslCertificateVerification` to `false` in the cluster config for **development only** (insecure), or (2) export the CA that signed your broker certificate to a PEM file and set `sslCaLocation` to that path (e.g. `keytool -exportcert -rfc -keystore client.truststore.jks -storepass pass -alias your-ca-alias -file ca.pem`).
+
 ## Topology: Auto-Discovery
 
 ### Auto-Discovered Entities (Real-Time, No Client Changes)
@@ -169,10 +215,7 @@ kafka-server-start.sh config/server.properties
 #   JMX_PORT: 9999
 ```
 
-**2. Configure JMX in StreamLens** (only needed once per cluster; stored in the database). Use either:
-
-- **UI**: Open the cluster card → **Edit Cluster** → set **JMX Host** (e.g. `localhost`) and **JMX Port** (e.g. `9999`) → **Update Cluster**.
-- **CLI** (optional): `cd server && uv run python debug/configure_jmx.py <cluster_id> localhost 9999` (replace `<cluster_id>` with your cluster ID; run the script with no args to list clusters).
+**2. Configure JMX in StreamLens** (only needed once per cluster; stored in `server/data/clusters.json`). Either edit the cluster in `data/clusters.json` and set `jmxHost` and `jmxPort`, or run: `cd server && uv run python debug/configure_jmx.py <cluster_id> localhost 9999` (replace `<cluster_id>` with your cluster ID; run the script with no args to list clusters).
 
 **3. Restart backend and sync:**
 ```bash
@@ -195,7 +238,7 @@ cd server
 uv run uvicorn main:app --reload --port 5000
 ```
 
-JMX configuration is saved in the database. You can change it anytime via **Edit Cluster** in the UI (or run `configure_jmx.py` again).
+JMX configuration is saved in `server/data/clusters.json`. You can change it anytime by editing that file and restarting the server, or by running `configure_jmx.py` again.
 
 ### Troubleshooting
 
