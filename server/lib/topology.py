@@ -5,6 +5,7 @@ from typing import Any
 from .kafka import kafka_service
 
 DEFAULT_MAX_TOPICS = 2000
+DEFAULT_TOPIC_PAGE_SIZE = 50
 
 
 def build_topology(cluster_id: int, cluster: dict) -> dict:
@@ -261,3 +262,137 @@ def build_topology(cluster_id: int, cluster: dict) -> dict:
     if meta is not None:
         result["_meta"] = meta
     return result
+
+
+def paginate_topology_data(data: dict, offset: int = 0, limit: int = DEFAULT_TOPIC_PAGE_SIZE) -> dict:
+    """
+    Return a paginated slice of topic nodes from the full topology snapshot.
+    Connected topics (those with producers/consumers/connectors/streams/ACLs) come first,
+    then standalone topics alphabetically.  Non-topic nodes are included only when they
+    have at least one edge to a visible topic.  Edges are filtered to visible endpoints.
+    """
+    all_nodes: list[dict] = data.get("nodes") or []
+    all_edges: list[dict] = data.get("edges") or []
+
+    # Separate topic nodes from non-topic nodes
+    topic_nodes: list[dict] = []
+    non_topic_nodes: list[dict] = []
+    for n in all_nodes:
+        if n.get("type") == "topic":
+            topic_nodes.append(n)
+        else:
+            non_topic_nodes.append(n)
+
+    # Identify topics that have connections (edges to/from non-topic nodes, or streams edges)
+    connected_topic_ids: set[str] = set()
+    for e in all_edges:
+        src = str(e.get("source", ""))
+        tgt = str(e.get("target", ""))
+        if src.startswith("topic:") and not tgt.startswith("topic:"):
+            connected_topic_ids.add(src)
+        if tgt.startswith("topic:") and not src.startswith("topic:"):
+            connected_topic_ids.add(tgt)
+        # Streams: topic-to-topic
+        if src.startswith("topic:") and tgt.startswith("topic:"):
+            connected_topic_ids.add(src)
+            connected_topic_ids.add(tgt)
+
+    # Stable sort: connected first, then alphabetical by label
+    def _sort_key(n: dict):
+        is_connected = 0 if n["id"] in connected_topic_ids else 1
+        label = (n.get("data") or {}).get("label", "")
+        return (is_connected, label.lower())
+
+    topic_nodes.sort(key=_sort_key)
+
+    total_topics = len(topic_nodes)
+    page_topics = topic_nodes[offset : offset + limit]
+    page_topic_ids = {n["id"] for n in page_topics}
+
+    # Build index: non-topic node id → set of connected topic ids (for fast lookup)
+    non_topic_to_topics: dict[str, set[str]] = {}
+    for e in all_edges:
+        src = str(e.get("source", ""))
+        tgt = str(e.get("target", ""))
+        if src.startswith("topic:") and not tgt.startswith("topic:"):
+            non_topic_to_topics.setdefault(tgt, set()).add(src)
+        elif tgt.startswith("topic:") and not src.startswith("topic:"):
+            non_topic_to_topics.setdefault(src, set()).add(tgt)
+
+    # Include non-topic nodes that have at least one edge to a visible topic
+    visible_non_topic: list[dict] = []
+    for n in non_topic_nodes:
+        linked_topics = non_topic_to_topics.get(n["id"], set())
+        if linked_topics & page_topic_ids:
+            visible_non_topic.append(n)
+
+    visible_ids = page_topic_ids | {n["id"] for n in visible_non_topic}
+
+    # Include edges where both endpoints are visible
+    visible_edges = [
+        e for e in all_edges
+        if str(e.get("source", "")) in visible_ids and str(e.get("target", "")) in visible_ids
+    ]
+
+    return {
+        "nodes": page_topics + visible_non_topic,
+        "edges": visible_edges,
+        "_meta": {
+            "totalTopicCount": total_topics,
+            "loadedTopicCount": min(offset + limit, total_topics),
+            "offset": offset,
+            "limit": limit,
+            "hasMore": offset + limit < total_topics,
+        },
+    }
+
+
+def search_topology(data: dict, query: str) -> dict:
+    """
+    Search ALL nodes in the full topology snapshot by label, id, or type.
+    Returns matching nodes together with their directly-connected non-topic nodes
+    and the edges that link them — so the client can merge them into the visible graph.
+    Also returns ``matchIds`` (the ids of nodes that matched the query text).
+    """
+    query_lower = (query or "").lower().strip()
+    if not query_lower:
+        return {"nodes": [], "edges": [], "matchIds": []}
+
+    all_nodes: list[dict] = data.get("nodes") or []
+    all_edges: list[dict] = data.get("edges") or []
+
+    # 1. Find every node whose label / id / type contains the query
+    match_ids: set[str] = set()
+    for n in all_nodes:
+        label = ((n.get("data") or {}).get("label") or "").lower()
+        nid = (n.get("id") or "").lower()
+        ntype = (n.get("type") or "").lower()
+        if query_lower in label or query_lower in nid or query_lower in ntype:
+            match_ids.add(n["id"])
+
+    if not match_ids:
+        return {"nodes": [], "edges": [], "matchIds": []}
+
+    # 2. For every matching topic node, also include directly-connected non-topic nodes
+    matching_topic_ids = {mid for mid in match_ids if mid.startswith("topic:")}
+    connected_ids: set[str] = set()
+    for e in all_edges:
+        src = str(e.get("source", ""))
+        tgt = str(e.get("target", ""))
+        if src in matching_topic_ids and not tgt.startswith("topic:"):
+            connected_ids.add(tgt)
+        if tgt in matching_topic_ids and not src.startswith("topic:"):
+            connected_ids.add(src)
+
+    visible_ids = match_ids | connected_ids
+    visible_nodes = [n for n in all_nodes if n["id"] in visible_ids]
+    visible_edges = [
+        e for e in all_edges
+        if str(e.get("source", "")) in visible_ids and str(e.get("target", "")) in visible_ids
+    ]
+
+    return {
+        "nodes": visible_nodes,
+        "edges": visible_edges,
+        "matchIds": sorted(match_ids),
+    }

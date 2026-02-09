@@ -6,9 +6,9 @@ SCHEMA_REGISTRY="http://localhost:8081"
 
 # Toggle features on/off
 CREATE_TOPICS=true       # set to false to skip topic creation
-START_PRODUCERS=false     # set to false to skip starting producers
-START_CONSUMERS=false     # set to false to skip starting consumers
-REGISTER_SCHEMAS=false   # set to false to skip registering schemas
+START_PRODUCERS=true     # set to false to skip starting producers
+START_CONSUMERS=true     # set to false to skip starting consumers
+REGISTER_SCHEMAS=true   # set to false to skip registering schemas
 
 # Performance tuning - adjust based on your system resources
 # ⚠️  Default settings are optimized for local development

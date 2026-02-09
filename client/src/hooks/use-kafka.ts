@@ -115,17 +115,45 @@ export function useDeleteCluster() {
 }
 
 // ============================================
-// TOPOLOGY
+// TOPOLOGY (paginated: first page via useQuery, subsequent pages via mutation)
 // ============================================
 
-export function useTopology(clusterId: number) {
+/** Number of topics per page in the topology view. Override with VITE_TOPICS_PER_PAGE env var. */
+export const TOPICS_PER_PAGE = Number(import.meta.env.VITE_TOPICS_PER_PAGE) || 50;
+
+export function useTopology(clusterId: number, topicLimit: number = TOPICS_PER_PAGE) {
   return useQuery({
     queryKey: [api.topology.get.path, clusterId],
     queryFn: async () => {
-      const url = `${API_BASE}${buildUrl(api.topology.get.path, { id: clusterId })}`;
+      let url = `${API_BASE}${buildUrl(api.topology.get.path, { id: clusterId })}`;
+      if (topicLimit > 0) {
+        url += `?topic_offset=0&topic_limit=${topicLimit}`;
+      }
       const res = await fetch(url);
       if (res.status === 404) return null; // No snapshot yet
       if (!res.ok) throw new Error("Failed to fetch topology");
+      return api.topology.get.responses[200].parse(await res.json());
+    },
+  });
+}
+
+/** Fetch the next page of topics for incremental loading */
+export function useLoadMoreTopics() {
+  return useMutation({
+    mutationFn: async ({
+      clusterId,
+      offset,
+      limit,
+    }: {
+      clusterId: number;
+      offset: number;
+      limit: number;
+    }) => {
+      const url = `${API_BASE}${buildUrl(api.topology.get.path, {
+        id: clusterId,
+      })}?topic_offset=${offset}&topic_limit=${limit}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to load more topics");
       return api.topology.get.responses[200].parse(await res.json());
     },
   });
@@ -140,12 +168,28 @@ export function useRefreshTopology() {
         method: api.topology.refresh.method,
       });
       if (!res.ok) throw new Error("Failed to refresh topology");
-      return api.topology.refresh.responses[200].parse(await res.json());
+      return res.json(); // full snapshot returned by server
     },
-    onSuccess: (snapshot, clusterId) => {
-      queryClient.setQueryData([api.topology.get.path, clusterId], snapshot);
+    onSuccess: (_data, clusterId) => {
+      // Invalidate topology query so it re-fetches page 1 with pagination
+      queryClient.invalidateQueries({ queryKey: [api.topology.get.path, clusterId] });
     },
   });
+}
+
+// ============================================
+// TOPOLOGY SEARCH (across ALL topics in the full snapshot, not just loaded ones)
+// ============================================
+
+/** Search the full topology snapshot on the server. Returns matching nodes + edges + matchIds. */
+export async function searchTopologyOnServer(
+  clusterId: number,
+  query: string
+): Promise<{ nodes: any[]; edges: any[]; matchIds: string[] }> {
+  const url = `${API_BASE}/api/clusters/${clusterId}/topology/search?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  if (!res.ok) return { nodes: [], edges: [], matchIds: [] };
+  return res.json();
 }
 
 // ============================================

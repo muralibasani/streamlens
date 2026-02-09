@@ -11,6 +11,8 @@ import { motion, AnimatePresence } from "framer-motion";
 interface AiChatPanelProps {
   topology: any;
   onHighlightNodes: (nodeIds: string[]) => void;
+  /** Fallback: search the full cluster for a topic when AI can't find it in loaded nodes */
+  onSearchAndNavigate?: (query: string) => Promise<void>;
 }
 
 interface Message {
@@ -19,7 +21,7 @@ interface Message {
   timestamp: number;
 }
 
-export function AiChatPanel({ topology, onHighlightNodes }: AiChatPanelProps) {
+export function AiChatPanel({ topology, onHighlightNodes, onSearchAndNavigate }: AiChatPanelProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     { 
@@ -58,6 +60,10 @@ export function AiChatPanel({ topology, onHighlightNodes }: AiChatPanelProps) {
       // Highlight nodes referenced in the answer
       if (result.highlightNodes && result.highlightNodes.length > 0) {
         onHighlightNodes(result.highlightNodes);
+      } else if (onSearchAndNavigate) {
+        // AI returned no highlights — try a full-cluster search as fallback
+        // so topics not in the loaded subset can still be found
+        await onSearchAndNavigate(userMessage.content);
       }
     } catch (error) {
       setMessages(prev => [...prev, { 

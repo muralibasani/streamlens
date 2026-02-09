@@ -134,8 +134,8 @@ export default function Dashboard() {
             </div>
             <div className="space-y-1 pt-0.5">
               <h2 className="text-4xl font-extrabold tracking-tight sm:text-3xl">
-                <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text text-transparent">
-                  StreamLens
+                <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                  streamLens
                 </span>
               </h2>
               <p className="max-w-sm text-sm leading-snug text-muted-foreground">

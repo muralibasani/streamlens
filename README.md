@@ -198,6 +198,20 @@ Example questions:
   - `Shift+Enter` — Previous match
 - **Highlighted Results** — Matching nodes are highlighted with a yellow ring
 
+### Topic Pagination (Large Clusters)
+
+For clusters with hundreds or thousands of topics, StreamLens loads topics incrementally to keep the UI fast and responsive.
+
+- **Initial load**: The first **50 topics** are rendered in the topology canvas, prioritizing **connected topics** (those with producers, consumers, connectors, streams, or ACLs) before standalone topics.
+- **Load More**: A "Load More Topics" button appears in the info banner and the stats panel when there are additional topics. Each click loads the next batch of 50 and merges them into the graph.
+- **Sorting**: Connected topics are always shown first. Remaining topics are sorted alphabetically.
+- **Stats**: The banner and stats panel display "Showing X of Y topics" so you always know how many are loaded.
+- **Search across all topics**: The search box searches **all** topics in the cluster, not just the ones currently loaded. If a match is found in an unloaded topic, its node (and connected producers/consumers/etc.) is automatically pulled into the graph and highlighted. A spinner shows while the server search is in progress.
+- **Sync**: Clicking "Sync" rebuilds the full topology on the server and resets the view to the first page.
+- **Auto Layout**: After loading more topics, click "Auto Layout" to re-arrange the graph.
+
+The page size (50) is built into the client. The server-side cap `TOPOLOGY_MAX_TOPICS` (default `2000`) still applies to the total number of topics stored in a snapshot.
+
 ## JMX Producer Auto-Discovery (Optional)
 
 Enable JMX on your Kafka brokers to see real-time active producers (⚡ JMX badge).
