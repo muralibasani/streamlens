@@ -45,7 +45,11 @@ const snapshotSchema = z.object({
     _meta: z
       .object({
         totalTopicCount: z.number(),
-        shownTopicCount: z.number(),
+        shownTopicCount: z.number().optional(),
+        loadedTopicCount: z.number().optional(),
+        offset: z.number().optional(),
+        limit: z.number().optional(),
+        hasMore: z.boolean().optional(),
       })
       .optional(),
   }),

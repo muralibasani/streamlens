@@ -84,28 +84,28 @@ const SourceBadge = ({ source }: { source?: string }) => {
   switch (source) {
     case 'auto-discovered':
       return (
-        <div className="flex items-center gap-1 text-[10px] text-green-400 bg-green-950/30 px-1.5 py-0.5 rounded border border-green-900/50">
+        <div className="flex items-center gap-1 text-[10px] text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-950/30 px-1.5 py-0.5 rounded border border-green-300 dark:border-green-900/50">
           <Sparkles className="w-3 h-3" />
           <span>Live</span>
         </div>
       );
     case 'config':
       return (
-        <div className="flex items-center gap-1 text-[10px] text-purple-400 bg-purple-950/30 px-1.5 py-0.5 rounded border border-purple-900/50">
+        <div className="flex items-center gap-1 text-[10px] text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-950/30 px-1.5 py-0.5 rounded border border-purple-300 dark:border-purple-900/50">
           <User className="w-3 h-3" />
           <span>Config</span>
         </div>
       );
     case 'jmx':
       return (
-        <div className="flex items-center gap-1 text-[10px] text-yellow-400 bg-yellow-950/30 px-1.5 py-0.5 rounded border border-yellow-900/50">
+        <div className="flex items-center gap-1 text-[10px] text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-950/30 px-1.5 py-0.5 rounded border border-yellow-300 dark:border-yellow-900/50">
           <Zap className="w-3 h-3" />
           <span>JMX</span>
         </div>
       );
     case 'acl':
       return (
-        <div className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-950/30 px-1.5 py-0.5 rounded border border-amber-900/50">
+        <div className="flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/30 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-900/50">
           <Shield className="w-3 h-3" />
           <span>ACL</span>
         </div>

@@ -23,7 +23,7 @@ from storage import (
     get_latest_snapshot,
     create_snapshot,
 )
-from lib.topology import build_topology
+from lib.topology import build_topology, paginate_topology_data, search_topology
 from lib.ai import query_topology
 
 
@@ -172,21 +172,45 @@ def clusters_delete(id: int):
 
 
 @app.get("/api/clusters/{id}/topology")
-def topology_get(id: int):
+def topology_get(id: int, topic_offset: int = 0, topic_limit: int = 0):
+    """
+    Return topology snapshot, optionally paginated.
+    When topic_limit > 0, only a page of topics (sorted: connected first, then alphabetical)
+    is returned along with their related non-topic nodes and edges.
+    """
     cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
     snapshot = get_latest_snapshot(id)
-    if snapshot:
-        return snapshot
-    try:
-        graph = build_topology(id, cluster)
-        snapshot = create_snapshot(id, graph)
-        return snapshot
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=404, detail="Topology not found")
+    if not snapshot:
+        try:
+            graph = build_topology(id, cluster)
+            snapshot = create_snapshot(id, graph)
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+        except Exception:
+            raise HTTPException(status_code=404, detail="Topology not found")
+
+    if topic_limit > 0 and isinstance(snapshot.get("data"), dict):
+        paginated = paginate_topology_data(snapshot["data"], topic_offset, topic_limit)
+        return {**snapshot, "data": paginated}
+    return snapshot
+
+
+@app.get("/api/clusters/{id}/topology/search")
+def topology_search(id: int, q: str = ""):
+    """
+    Search ALL nodes in the full (unpaginated) topology snapshot.
+    Returns matching nodes + their connected nodes/edges so the client
+    can merge them into the visible graph.
+    """
+    cluster = get_cluster(id)
+    if not cluster:
+        raise HTTPException(status_code=404, detail="Cluster not found")
+    snapshot = get_latest_snapshot(id)
+    if not snapshot or not isinstance(snapshot.get("data"), dict):
+        raise HTTPException(status_code=404, detail="No topology snapshot available")
+    return search_topology(snapshot["data"], q)
 
 
 @app.post("/api/clusters/{id}/refresh")
