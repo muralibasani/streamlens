@@ -853,46 +853,49 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
               streamLens
             </span>
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col min-w-0 max-w-[480px]">
             <div className="flex items-center gap-2">
-              <h1 className="font-bold text-lg tracking-tight">{cluster?.name || "Loading..."}</h1>
+              <h1 className="font-bold text-lg tracking-tight truncate" title={cluster?.name}>{cluster?.name || "Loading..."}</h1>
+              {cluster?.clusterType && (
+                <div className="flex items-center gap-1 text-xs text-sky-700 dark:text-sky-400 bg-sky-100 dark:bg-sky-950/30 px-2 py-0.5 rounded border border-sky-300 dark:border-sky-900/50 shrink-0">
+                  <span>{cluster.clusterType}</span>
+                </div>
+              )}
               {health?.online ? (
-                <div className="flex items-center gap-1 text-xs text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-950/30 px-2 py-0.5 rounded border border-green-300 dark:border-green-900/50">
+                <div className="flex items-center gap-1 text-xs text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-950/30 px-2 py-0.5 rounded border border-green-300 dark:border-green-900/50 shrink-0">
                   <CheckCircle2 className="w-3 h-3" />
                   <span>Online</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 text-xs text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-950/30 px-2 py-0.5 rounded border border-red-300 dark:border-red-900/50">
+                <div className="flex items-center gap-1 text-xs text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-950/30 px-2 py-0.5 rounded border border-red-300 dark:border-red-900/50 shrink-0">
                   <XCircle className="w-3 h-3" />
                   <span>Offline</span>
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono opacity-70 flex-wrap">
-              <span className="flex items-center gap-1">
-                <Server className="w-3 h-3" />
-                {cluster?.bootstrapServers || "—"}
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono opacity-70 min-w-0">
+              <span className="flex items-center gap-1 truncate max-w-[200px]" title={cluster?.bootstrapServers}>
+                <Server className="w-3 h-3 shrink-0" />
+                <span className="truncate">{cluster?.bootstrapServers || "—"}</span>
               </span>
               {cluster?.schemaRegistryUrl && (
                 <>
-                  <span>•</span>
-                  <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                    <span>Schema:</span>
-                    <span>{cluster.schemaRegistryUrl}</span>
+                  <span className="shrink-0">•</span>
+                  <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 truncate max-w-[120px]" title={cluster.schemaRegistryUrl}>
+                    <span className="shrink-0">Schema</span>
                   </span>
                 </>
               )}
               {cluster?.connectUrl && (
                 <>
-                  <span>•</span>
-                  <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400">
-                    <span>Connect:</span>
-                    <span>{cluster.connectUrl}</span>
+                  <span className="shrink-0">•</span>
+                  <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 truncate max-w-[120px]" title={cluster.connectUrl}>
+                    <span className="shrink-0">Connect</span>
                   </span>
                 </>
               )}
-              <span>•</span>
-              <span>ID: {clusterId}</span>
+              <span className="shrink-0">•</span>
+              <span className="shrink-0">ID: {clusterId}</span>
             </div>
           </div>
         </div>
@@ -924,6 +927,15 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                     </div>
                     <p className="text-muted-foreground text-xs leading-relaxed">
                       Active producers detected from JMX metrics. Shows topics receiving messages <i>right now</i>. Requires JMX enabled on brokers.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="flex items-center gap-1 text-[10px] text-teal-700 dark:text-teal-400 bg-teal-100 dark:bg-teal-950/30 px-1.5 py-0.5 rounded border border-teal-300 dark:border-teal-900/50 whitespace-nowrap mt-0.5">
+                      <Activity className="w-3 h-3" />
+                      <span>Offset</span>
+                    </div>
+                    <p className="text-muted-foreground text-xs leading-relaxed">
+                      Active producers detected by offset changes. Compares topic watermarks across refreshes — no JMX needed. Fallback for managed Kafka (e.g. Aiven).
                     </p>
                   </div>
                 </div>

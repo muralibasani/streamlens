@@ -18,6 +18,35 @@ def _get_provider() -> str:
         return "gemini"
     return "openai"  # default when no key set
 
+
+def get_ai_status() -> dict:
+    """Return the currently configured AI provider and whether it has an API key set."""
+    provider = _get_provider()
+    has_key = False
+    model = None
+
+    if provider == "openai":
+        key = (os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or "").strip()
+        has_key = bool(key) and key != "dummy"
+        model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL", "gpt-4o-mini")
+    elif provider == "gemini":
+        key = (os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY") or "").strip()
+        has_key = bool(key) and key != "dummy"
+        model = os.environ.get("AI_INTEGRATIONS_GEMINI_MODEL", "gemini-2.0-flash")
+    elif provider == "anthropic":
+        key = (os.environ.get("AI_INTEGRATIONS_ANTHROPIC_API_KEY") or "").strip()
+        has_key = bool(key)
+        model = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
+    elif provider == "ollama":
+        has_key = True  # Ollama is local, no key needed
+        model = os.environ.get("OLLAMA_MODEL", "llama3:latest")
+
+    return {
+        "provider": provider if has_key else None,
+        "configured": has_key,
+        "model": model if has_key else None,
+    }
+
 # Lazy OpenAI client (only when provider is openai)
 _openai_client = None
 

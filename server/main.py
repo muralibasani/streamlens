@@ -22,9 +22,10 @@ from storage import (
     delete_cluster,
     get_latest_snapshot,
     create_snapshot,
+    sanitize_cluster_for_api,
 )
 from lib.topology import build_topology, paginate_topology_data, search_topology
-from lib.ai import query_topology
+from lib.ai import query_topology, get_ai_status
 
 
 class CreateClusterBody(BaseModel):
@@ -90,9 +91,15 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/api/ai/status")
+def ai_status():
+    """Return the currently configured AI provider and model."""
+    return get_ai_status()
+
+
 @app.get("/api/clusters")
 def clusters_list():
-    return get_clusters()
+    return [sanitize_cluster_for_api(c) for c in get_clusters()]
 
 
 @app.get("/api/clusters/{id}")
@@ -100,7 +107,7 @@ def clusters_get(id: int):
     cluster = get_cluster(id)
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    return cluster
+    return sanitize_cluster_for_api(cluster)
 
 
 @app.get("/api/clusters/{id}/health")
@@ -134,7 +141,7 @@ def clusters_create(body: CreateClusterBody):
         )
         graph = build_topology(cluster["id"], cluster)
         create_snapshot(cluster["id"], graph)
-        return cluster
+        return sanitize_cluster_for_api(cluster)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail={"message": str(e), "field": None})
     except Exception as e:
@@ -160,7 +167,7 @@ def clusters_update(id: int, body: CreateClusterBody):
     )
     if not cluster:
         raise HTTPException(status_code=404, detail="Cluster not found")
-    return cluster
+    return sanitize_cluster_for_api(cluster)
 
 @app.delete("/api/clusters/{id}", status_code=204)
 def clusters_delete(id: int):

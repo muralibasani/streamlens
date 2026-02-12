@@ -27,6 +27,7 @@ export type InsertCluster = z.infer<typeof insertClusterSchema>;
 const clusterSchema = z.object({
   id: z.number(),
   name: z.string(),
+  clusterType: z.string().nullable().optional(),
   bootstrapServers: z.string(),
   schemaRegistryUrl: z.string().nullable(),
   connectUrl: z.string().nullable(),

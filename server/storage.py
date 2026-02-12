@@ -7,6 +7,7 @@ import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 _SERVER_DIR = Path(__file__).resolve().parent
 _CLUSTERS_PATH = Path(os.environ.get("CLUSTERS_JSON", _SERVER_DIR / "data" / "clusters.json"))
@@ -64,6 +65,7 @@ def _cluster_from_row(c: dict) -> dict:
     out = {
         "id": c["id"],
         "name": c["name"],
+        "clusterType": c.get("clusterType") or c.get("cluster_type") or None,
         "bootstrapServers": c.get("bootstrapServers") or c.get("bootstrap_servers") or "",
         "schemaRegistryUrl": c.get("schemaRegistryUrl") or c.get("schema_registry_url"),
         "connectUrl": c.get("connectUrl") or c.get("connect_url"),
@@ -196,6 +198,44 @@ def delete_cluster(id: int) -> None:
     _write_clusters(clusters)
     with _lock:
         _snapshot_cache.pop(id, None)
+
+
+def _strip_url_credentials(url: str | None) -> str | None:
+    """Remove userinfo (username:password) from a URL, keeping the rest intact."""
+    if not url:
+        return url
+    try:
+        parsed = urlparse(url)
+        if not parsed.username:
+            return url  # no credentials present
+        # Reconstruct without userinfo
+        netloc = parsed.hostname or ""
+        if parsed.port:
+            netloc = f"{netloc}:{parsed.port}"
+        return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+    except Exception:
+        return url  # return as-is if parsing fails
+
+
+# Fields that should never be sent to the frontend
+_SENSITIVE_FIELDS = {
+    "sslCaLocation", "sslCertificateLocation", "sslKeyLocation", "sslKeyPassword",
+    "sslTruststoreLocation", "sslTruststorePassword", "sslKeystoreLocation",
+    "sslKeystoreType", "sslKeystorePassword", "sslEndpointIdentificationAlgorithm",
+    "enableSslCertificateVerification",
+}
+
+
+def sanitize_cluster_for_api(cluster: dict) -> dict:
+    """Return a copy of the cluster dict safe for the frontend (no credentials, no SSL secrets)."""
+    out = dict(cluster)
+    out["schemaRegistryUrl"] = _strip_url_credentials(out.get("schemaRegistryUrl"))
+    out["connectUrl"] = _strip_url_credentials(out.get("connectUrl"))
+    out["bootstrapServers"] = _strip_url_credentials(out.get("bootstrapServers"))
+    # Remove SSL key material — the frontend never needs these
+    for field in _SENSITIVE_FIELDS:
+        out.pop(field, None)
+    return out
 
 
 def get_latest_snapshot(cluster_id: int) -> dict | None:

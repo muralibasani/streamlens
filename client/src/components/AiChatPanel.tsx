@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { useAiQuery } from "@/hooks/use-kafka";
+import { useAiQuery, useAiStatus } from "@/hooks/use-kafka";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Loader2, Send, Sparkles, Bot } from "lucide-react";
+import { Loader2, Send, Sparkles, Bot, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -21,6 +21,13 @@ interface Message {
   timestamp: number;
 }
 
+const PROVIDER_LABELS: Record<string, string> = {
+  openai: "OpenAI",
+  gemini: "Gemini",
+  anthropic: "Claude",
+  ollama: "Ollama",
+};
+
 export function AiChatPanel({ topology, onHighlightNodes, onSearchAndNavigate }: AiChatPanelProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
@@ -33,6 +40,7 @@ export function AiChatPanel({ topology, onHighlightNodes, onSearchAndNavigate }:
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const aiQuery = useAiQuery();
+  const { data: aiStatus } = useAiStatus();
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -76,11 +84,27 @@ export function AiChatPanel({ topology, onHighlightNodes, onSearchAndNavigate }:
 
   return (
     <Card className="flex flex-col h-full border-l border-border rounded-none bg-card/50 backdrop-blur-sm">
-      <CardHeader className="border-b border-border py-4 px-4 bg-muted/20">
-        <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-primary">
-          <Sparkles className="w-4 h-4" />
-          StreamPilot
-        </CardTitle>
+      <CardHeader className="border-b border-border py-3 px-4 bg-muted/20">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-primary">
+            <Sparkles className="w-4 h-4" />
+            StreamPilot
+          </CardTitle>
+          {aiStatus?.configured ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+              {PROVIDER_LABELS[aiStatus.provider || ""] || aiStatus.provider}
+              {aiStatus.model && (
+                <span className="text-muted-foreground font-normal">· {aiStatus.model}</span>
+              )}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-yellow-100 dark:bg-yellow-950/30 px-2.5 py-0.5 text-[10px] font-medium text-yellow-700 dark:text-yellow-400 ring-1 ring-yellow-300 dark:ring-yellow-900/50">
+              <AlertCircle className="w-3 h-3" />
+              Not configured
+            </span>
+          )}
+        </div>
       </CardHeader>
       
       <ScrollArea className="flex-1 p-4 overflow-y-auto">

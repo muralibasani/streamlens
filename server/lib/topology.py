@@ -105,6 +105,9 @@ def build_topology(cluster_id: int, cluster: dict) -> dict:
         elif label.startswith("jmx:active-producer:"):
             # For JMX producers, use a cleaner label
             label = label.replace("jmx:active-producer:", "Active → ")
+        elif label.startswith("offset:active-producer:"):
+            # For offset-detected producers, use a cleaner label
+            label = label.replace("offset:active-producer:", "Active → ")
         
         nodes.append({
             "id": p["id"],
@@ -122,6 +125,9 @@ def build_topology(cluster_id: int, cluster: dict) -> dict:
                 animated = False
             elif source == "jmx":
                 edge_style = {"strokeDasharray": "2,2"}  # Fine dashed for JMX (active)
+                animated = True
+            elif source == "offset":
+                edge_style = {"strokeDasharray": "3,3"}  # Dashed for offset-detected (active)
                 animated = True
             else:
                 edge_style = {}  # Solid for manual
