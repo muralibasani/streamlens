@@ -196,6 +196,18 @@ export async function searchTopologyOnServer(
 // AI QUERY
 // ============================================
 
+export function useAiStatus() {
+  return useQuery({
+    queryKey: ["/api/ai/status"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/ai/status`);
+      if (!res.ok) return { provider: null, configured: false, model: null };
+      return res.json() as Promise<{ provider: string | null; configured: boolean; model: string | null }>;
+    },
+    staleTime: 5 * 60 * 1000, // cache for 5 minutes
+  });
+}
+
 export function useAiQuery() {
   return useMutation({
     mutationFn: async (data: { question: string; topology: any }) => {

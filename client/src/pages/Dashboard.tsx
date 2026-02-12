@@ -41,6 +41,11 @@ function ClusterCard({ cluster }: { cluster: any }) {
                       Offline
                     </span>
                   )}
+                  {cluster.clusterType && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-600 dark:text-sky-400 ring-1 ring-sky-500/20">
+                      {cluster.clusterType}
+                    </span>
+                  )}
                   {health?.clusterMode && (
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${health.clusterMode === "kraft" ? "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20" : "bg-amber-500/10 text-amber-400 ring-amber-500/20"}`}>
                       <Shield className="h-3 w-3" />

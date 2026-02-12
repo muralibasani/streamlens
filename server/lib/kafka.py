@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 # Cache for JKS/P12 -> PEM conversion (temp dirs keyed by config hash so we reuse)
 _ssl_pem_cache: dict[str, tuple[tempfile.TemporaryDirectory, str | None, str | None, str | None]] = {}
 
+# Offset-based producer detection: stores {cluster_id: {"topic:partition": high_watermark, "_ts": timestamp}}
+_offset_baseline: dict[int, dict[str, Any]] = {}
+
 
 def _ssl_java_to_pem(cluster: dict) -> tuple[str | None, str | None, str | None]:
     """
@@ -304,18 +307,30 @@ class KafkaService:
             
             # Producers: Try multiple sources
             producers = []
+            jmx_succeeded = False
 
             # Source 1: JMX metrics (real-time active producers)
             jmx_host = cluster.get("jmxHost")
             jmx_port = cluster.get("jmxPort")
             if jmx_host and jmx_port:
                 jmx_producers = self._fetch_jmx_producers(jmx_host, jmx_port)
+                if jmx_producers:
+                    jmx_succeeded = True
                 producers.extend(jmx_producers)
             
             # Source 2: ACL-based potential producers (if ACLs enabled)
             acl_producers = self._fetch_acl_producers(admin)
             producers.extend(acl_producers)
-            
+
+            # Source 3: Offset-change detection (fallback when JMX is unavailable)
+            # Compares high-watermarks across successive topology refreshes.
+            # Skipped when JMX already found producers (to avoid duplicates).
+            if not jmx_succeeded:
+                offset_producers = self._detect_producers_by_offset_change(
+                    cluster.get("id", 0), client_cfg, state["topics"]
+                )
+                producers.extend(offset_producers)
+
             state["producers"] = producers
             logger.info("Topology state: %d producers (will appear in UI after Sync)", len(producers))
             
@@ -664,7 +679,94 @@ class KafkaService:
             logger.debug("To enable JMX on Kafka, set: JMX_PORT=9999 before starting Kafka")
         
         return producers
-    
+
+    def _detect_producers_by_offset_change(
+        self, cluster_id: int, client_cfg: dict, topics: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """
+        Detect active producers by comparing topic high-watermarks against a
+        previously stored baseline.  If any partition's high-watermark has
+        increased since the last check, the topic has an active producer.
+
+        Works across successive topology builds (non-blocking):
+        - 1st call: records baseline offsets, returns []  (nothing to compare to)
+        - 2nd+ calls: compares current offsets to the previous baseline,
+          detects increases, then stores current as the new baseline.
+        """
+        producers: list[dict[str, Any]] = []
+        if not topics:
+            return producers
+
+        try:
+            consumer = Consumer({**client_cfg, "group.id": f"__streamlens-offset-probe-{cluster_id}"})
+            current_offsets: dict[str, int] = {}
+
+            for t in topics:
+                topic_name = t.get("name") or ""
+                if not topic_name or topic_name.startswith("__"):
+                    continue
+                part_count = t.get("partitions") or 0
+                for p in range(part_count):
+                    try:
+                        tp = TopicPartition(topic_name, p)
+                        _low, high = consumer.get_watermark_offsets(tp, cached=False, timeout=2.0)
+                        current_offsets[f"{topic_name}:{p}"] = high
+                    except Exception:
+                        pass  # partition unreachable — skip
+
+            consumer.close()
+
+            prev = _offset_baseline.get(cluster_id)
+            now = time.time()
+
+            if prev is None:
+                # First run: store baseline, nothing to compare
+                _offset_baseline[cluster_id] = {**current_offsets, "_ts": now}
+                logger.info(
+                    "Offset detection [cluster %d]: baseline recorded (%d partitions). "
+                    "Active producers will be detected on next refresh.",
+                    cluster_id, len(current_offsets),
+                )
+                return producers
+
+            prev_ts = prev.get("_ts", 0)
+            elapsed = now - prev_ts
+
+            # Detect topics whose watermarks increased
+            active_topics: set[str] = set()
+            for key, cur_high in current_offsets.items():
+                prev_high = prev.get(key)
+                if prev_high is not None and cur_high > prev_high:
+                    topic_name = key.rsplit(":", 1)[0]
+                    active_topics.add(topic_name)
+
+            # Update baseline for next cycle
+            _offset_baseline[cluster_id] = {**current_offsets, "_ts": now}
+
+            if active_topics:
+                logger.info(
+                    "Offset detection [cluster %d]: %d topic(s) with active producers "
+                    "(compared over %.0fs): %s",
+                    cluster_id, len(active_topics), elapsed, sorted(active_topics),
+                )
+                for topic in sorted(active_topics):
+                    producers.append({
+                        "id": f"offset:active-producer:{topic}",
+                        "producesTo": [topic],
+                        "source": "offset",
+                        "label": f"Active Producer → {topic}",
+                    })
+            else:
+                logger.info(
+                    "Offset detection [cluster %d]: no offset changes detected (%.0fs window).",
+                    cluster_id, elapsed,
+                )
+
+        except Exception as e:
+            logger.warning("Offset-based producer detection failed for cluster %d: %s", cluster_id, e)
+
+        return producers
+
     def _fetch_acl_producers(self, admin: AdminClient) -> list[dict[str, Any]]:
         """
         Fetch potential producers from ACLs (if ACLs are enabled).

@@ -103,6 +103,13 @@ const SourceBadge = ({ source }: { source?: string }) => {
           <span>JMX</span>
         </div>
       );
+    case 'offset':
+      return (
+        <div className="flex items-center gap-1 text-[10px] text-teal-700 dark:text-teal-400 bg-teal-100 dark:bg-teal-950/30 px-1.5 py-0.5 rounded border border-teal-300 dark:border-teal-900/50">
+          <Activity className="w-3 h-3" />
+          <span>Offset</span>
+        </div>
+      );
     case 'acl':
       return (
         <div className="flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/30 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-900/50">
