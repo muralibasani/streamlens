@@ -1,5 +1,6 @@
 node_modules
 dist
+coverage
 .DS_Store
 *.tar.gz
 
@@ -9,6 +10,8 @@ __pycache__
 venv
 *.pyc
 .pytest_cache
+coverage.xml
+.coverage
 .mypy_cache
 uv.lock
 *.egg-info/

@@ -1,4 +1,50 @@
-import { apiRequest } from "./queryClient";
+import { apiRequest, getQueryFn } from "./queryClient";
+
+describe("getQueryFn", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns parsed JSON on successful response", async () => {
+    const mockData = { id: 1, name: "test" };
+    const mockResponse = new Response(JSON.stringify(mockData), { status: 200 });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse);
+
+    const queryFn = getQueryFn({ on401: "throw" });
+    const result = await queryFn({ queryKey: ["/api/data"] });
+
+    expect(result).toEqual(mockData);
+    expect(fetch).toHaveBeenCalledWith("/api/data", { credentials: "include" });
+  });
+
+  it("throws on 401 when on401 is throw", async () => {
+    const mockResponse = new Response("Unauthorized", {
+      status: 401,
+      statusText: "Unauthorized",
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse);
+
+    const queryFn = getQueryFn({ on401: "throw" });
+
+    await expect(queryFn({ queryKey: ["/api/protected"] })).rejects.toThrow(
+      "401",
+    );
+  });
+
+  it("throws on 404 response", async () => {
+    const mockResponse = new Response("Not Found", {
+      status: 404,
+      statusText: "Not Found",
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse);
+
+    const queryFn = getQueryFn({ on401: "throw" });
+
+    await expect(queryFn({ queryKey: ["/api/missing"] })).rejects.toThrow(
+      "404",
+    );
+  });
+});
 
 describe("apiRequest", () => {
   beforeEach(() => {

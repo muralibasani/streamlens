@@ -39,7 +39,7 @@ jobs:
         with:
           pytest-xml-coverage-path: server/coverage.xml
           title: "Server Test Coverage"
-          badge-title: Server Coverage
+          badge-title: Tests Coverage - Server
           unique-id-for-comment: server-coverage
 
   server-integration-tests:
@@ -106,7 +106,7 @@ jobs:
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           working-directory: client
-          name: "Client Test Coverage"
+          name: "Tests Coverage - Frontend"
 
   client-build:
     name: Client Build

@@ -167,6 +167,49 @@ class TestBuildTopology:
         assert acl_nodes[0]["data"]["label"] == "ACL (2)"
         assert len(acl_nodes[0]["data"]["acls"]) == 2
 
+    @patch("src.topology.kafka_service")
+    def test_build_topology_exception_returns_empty(self, mock_ks):
+        """When fetch_system_state raises, build_topology returns empty nodes and edges."""
+        mock_ks.fetch_system_state.side_effect = Exception("connection failed")
+        result = build_topology(1, {"bootstrapServers": "localhost:9092"})
+        assert result["nodes"] == []
+        assert result["edges"] == []
+
+    @patch("src.topology.kafka_service")
+    def test_build_topology_more_topics_than_max_sampling(self, mock_ks):
+        """When cluster has more topics than max_topics, sampling is applied and _meta is set."""
+        import os
+
+        mock_ks.fetch_system_state.return_value = _fake_state(
+            topics=[{"name": f"topic-{i}", "partitions": 1, "replication": 1} for i in range(50)]
+        )
+        with patch.dict(os.environ, {"TOPOLOGY_MAX_TOPICS": "10"}):
+            result = build_topology(1, {"bootstrapServers": "localhost:9092"})
+
+        topic_nodes = [n for n in result["nodes"] if n["type"] == "topic"]
+        assert len(topic_nodes) <= 10
+        assert "_meta" in result
+        assert result["_meta"]["totalTopicCount"] == 50
+        assert result["_meta"]["shownTopicCount"] <= 10
+
+    @patch("src.topology.kafka_service")
+    def test_build_topology_sampling_includes_connected_topics(self, mock_ks):
+        """Sampling should always include connected topics (consumers/producers)."""
+        import os
+
+        mock_ks.fetch_system_state.return_value = _fake_state(
+            topics=[{"name": f"topic-{i}", "partitions": 1, "replication": 1} for i in range(100)],
+            consumers=[{"id": "group:cg", "consumesFrom": ["topic-0", "topic-42"], "source": "auto", "isStreams": False}],
+        )
+        with patch.dict(os.environ, {"TOPOLOGY_MAX_TOPICS": "20"}):
+            result = build_topology(1, {"bootstrapServers": "localhost:9092"})
+
+        topic_ids = {n["id"] for n in result["nodes"] if n["type"] == "topic"}
+        assert "topic:topic-0" in topic_ids
+        assert "topic:topic-42" in topic_ids
+        assert "_meta" in result
+        assert result["_meta"]["totalTopicCount"] == 100
+
 
 class TestPaginateTopology:
     def _make_topology(self, topic_count, with_consumer=False):
