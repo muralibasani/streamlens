@@ -11,7 +11,7 @@ describe("getQueryFn", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse);
 
     const queryFn = getQueryFn({ on401: "throw" });
-    const result = await queryFn({ queryKey: ["/api/data"] });
+    const result = await queryFn({ queryKey: ["/api/data"] } as any);
 
     expect(result).toEqual(mockData);
     expect(fetch).toHaveBeenCalledWith("/api/data", { credentials: "include" });
@@ -26,7 +26,7 @@ describe("getQueryFn", () => {
 
     const queryFn = getQueryFn({ on401: "throw" });
 
-    await expect(queryFn({ queryKey: ["/api/protected"] })).rejects.toThrow(
+    await expect(queryFn({ queryKey: ["/api/protected"] } as any)).rejects.toThrow(
       "401",
     );
   });
@@ -40,7 +40,7 @@ describe("getQueryFn", () => {
 
     const queryFn = getQueryFn({ on401: "throw" });
 
-    await expect(queryFn({ queryKey: ["/api/missing"] })).rejects.toThrow(
+    await expect(queryFn({ queryKey: ["/api/missing"] } as any)).rejects.toThrow(
       "404",
     );
   });

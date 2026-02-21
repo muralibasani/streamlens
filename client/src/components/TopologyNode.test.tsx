@@ -11,7 +11,7 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+(globalThis as any).fetch = mockFetch;
 
 function renderNode(data: Record<string, unknown>, selected = false) {
   return render(

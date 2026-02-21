@@ -12,6 +12,8 @@ vi.mock("reactflow", () => ({
 
 const defaultEdgeProps = {
   id: "e1-2",
+  source: "topic:input",
+  target: "topic:output",
   sourceX: 0,
   sourceY: 0,
   targetX: 100,
@@ -19,7 +21,7 @@ const defaultEdgeProps = {
   sourcePosition: { x: 0, y: 0 } as any,
   targetPosition: { x: 100, y: 100 } as any,
   data: {},
-};
+} as any;
 
 describe("StreamsEdge", () => {
   it("renders with required ReactFlow edge props", () => {
