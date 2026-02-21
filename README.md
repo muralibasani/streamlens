@@ -1,6 +1,14 @@
-# streamLens
+<p align="center">
+  <img src="client/public/favicon.svg" alt="StreamLens logo" width="100" />
+</p>
 
-A full-stack app for visualizing Apache Kafka topologies — topics, producers, consumers, streams, schemas, connectors, and ACLs — with an optional AI assistant.
+<h1 align="center">streamLens</h1>
+
+<p align="center">A full-stack app for visualizing Apache Kafka topologies — topics, producers, consumers, streams, schemas, connectors, and ACLs — with an optional AI assistant.</p>
+
+<p align="center">
+  <img src="resources/StreamLens.gif" alt="StreamLens" width="700" />
+</p>
 
 ## Features
 
@@ -19,15 +27,6 @@ A full-stack app for visualizing Apache Kafka topologies — topics, producers, 
 - **Dark / light theme** — Toggle between themes
 
 ## Quick Start
-
-### Docker (recommended)
-
-```bash
-docker build -f container/Dockerfile -t streamlens .
-docker run -p 5000:5000 streamlens
-```
-
-Open http://localhost:5000. See [container/README.md](container/README.md) for volume mounts and environment variables.
 
 ### Local development
 
@@ -50,6 +49,15 @@ npm run dev
 ```
 
 Open http://localhost:5173. The dev server proxies `/api` to the backend. Set `VITE_API_URL` if your backend runs on a different host/port.
+
+### Docker
+
+```bash
+docker build -f container/Dockerfile -t streamlens .
+docker run -p 5000:5000 streamlens
+```
+
+Open http://localhost:5000. See [container/README.md](container/README.md) for volume mounts and environment variables.
 
 ## Project Structure
 
@@ -82,7 +90,7 @@ Override the file path with the `CLUSTERS_JSON` env var.
 
 ### Supported Protocols
 
-StreamLens currently supports **PLAINTEXT** and **SSL** Kafka listener protocols.
+streamLens currently supports **PLAINTEXT** and **SSL** Kafka listener protocols.
 
 For SSL connections, add these fields to the cluster object:
 
@@ -106,10 +114,6 @@ kafka-acls.sh --bootstrap-server localhost:9092 \
 ```
 
 Replace `User:streamlens` with your actual principal.
-
-### Kafka Streams
-
-Define Kafka Streams apps in `server/streams.yaml` to visualize stream processing edges (input topic → output topic).
 
 ### JMX Producer Detection (Optional)
 
