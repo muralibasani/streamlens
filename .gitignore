@@ -12,6 +12,7 @@ venv
 .pytest_cache
 coverage.xml
 .coverage
+pytest-coverage.txt
 .mypy_cache
 uv.lock
 *.egg-info/
