@@ -4,7 +4,16 @@
 
 <h1 align="center">streamLens</h1>
 
-<p align="center">A full-stack app for visualizing Apache Kafka topologies — topics, producers, consumers, streams, schemas, connectors, and ACLs — with an optional AI assistant.</p>
+<p align="center">
+  <strong>Visualize and explore Apache Kafka topologies — topics, producers, consumers, streams, schemas, connectors, and ACLs — with an AI assistant that queries live broker metrics.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/muralibasani/streamlens/stargazers"><img src="https://img.shields.io/github/stars/muralibasani/streamlens?style=flat&logo=github&label=Stars" alt="GitHub stars" /></a>
+  <a href="https://github.com/muralibasani/streamlens/blob/main/LICENSE"><img src="https://img.shields.io/github/license/muralibasani/streamlens?style=flat" alt="License" /></a>
+  <a href="https://github.com/muralibasani/streamlens/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/muralibasani/streamlens/ci.yml?branch=main&label=CI" alt="CI" /></a>
+  <a href="https://github.com/muralibasani/streamlens/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome" /></a>
+</p>
 
 <p align="center">
   <img src="resources/StreamLens.gif" alt="StreamLens" width="700" />
@@ -185,6 +194,12 @@ See `server/src/kafka/metrics.py` for the full catalog and PromQL queries.
 | `AI_PROVIDER` | AI provider: `openai`, `gemini`, `anthropic`, `ollama` |
 
 See [docs/AI_SETUP.md](docs/AI_SETUP.md) for AI-specific env vars.
+
+## Support
+
+If you find StreamLens useful, consider giving it a star on GitHub — it helps others discover the project and motivates continued development.
+
+<a href="https://github.com/muralibasani/streamlens/stargazers"><img src="https://img.shields.io/github/stars/muralibasani/streamlens?style=social" alt="Star on GitHub" /></a>
 
 ## Contributing
 
