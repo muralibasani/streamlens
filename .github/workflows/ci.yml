@@ -34,8 +34,7 @@ jobs:
         run: uv run pytest tests/unit -v --cov=src --cov-report=xml:coverage.xml
 
       - name: Post server coverage to PR
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: server
@@ -118,8 +117,7 @@ jobs:
         run: npx vitest run --coverage
 
       - name: Client coverage comment
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           working-directory: client
