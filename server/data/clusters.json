@@ -47,7 +47,7 @@
         "saslOauthbearerMethod": "oidc",
         "saslOauthbearerClientId": "your_oauthbearer_client_id",
         "saslOauthbearerClientSecret": "your_oauthbearer_client_secret",
-        "saslOauthbearerTokenEndpointUrl": "https://keycloak.dahbest.kfn:8443/realms/master/protocol/openid-connect/token",
+        "saslOauthbearerTokenEndpointUrl": "https://keycloakhost:8443/realms/master/protocol/openid-connect/token",
         "sslTruststoreLocation": "/certs/client.truststore.jks",
         "sslTruststorePassword": "pwd",
         "sslEndpointIdentificationAlgorithm": "",
