@@ -17,7 +17,7 @@ import { AiChatPanel } from "@/components/AiChatPanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle, ArrowRightLeft, MoreHorizontal } from "lucide-react";
+import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle, ArrowRightLeft, MoreHorizontal, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/hooks/use-theme";
 import { Link } from "wouter";
@@ -78,6 +78,56 @@ const edgeTypes = {
   streams: StreamsEdge,
 };
 
+// Compute a filtered subgraph: matched nodes + one-hop neighbors + connecting edges
+function computeFilteredGraph(
+  allNodes: any[],
+  allEdges: any[],
+  query: string
+): { nodes: any[]; edges: any[]; matchIds: string[] } {
+  if (!query.trim()) {
+    return { nodes: allNodes, edges: allEdges, matchIds: [] };
+  }
+  const searchLower = query.toLowerCase();
+  const matchIds: string[] = [];
+  const matchIdSet = new Set<string>();
+
+  for (const node of allNodes) {
+    const label = node.data?.label?.toLowerCase() || "";
+    const type = node.data?.type?.toLowerCase() || "";
+    const id = node.id.toLowerCase();
+    if (label.includes(searchLower) || type.includes(searchLower) || id.includes(searchLower)) {
+      matchIds.push(node.id);
+      matchIdSet.add(node.id);
+    }
+  }
+
+  if (matchIds.length === 0) {
+    return { nodes: [], edges: [], matchIds: [] };
+  }
+
+  // Find one-hop neighbors via edges
+  const visibleIds = new Set(matchIdSet);
+  for (const edge of allEdges) {
+    const src = String(edge.source);
+    const tgt = String(edge.target);
+    if (matchIdSet.has(src)) visibleIds.add(tgt);
+    if (matchIdSet.has(tgt)) visibleIds.add(src);
+  }
+
+  const filteredNodes = allNodes
+    .filter((n) => visibleIds.has(n.id))
+    .map((n) => ({
+      ...n,
+      data: { ...n.data, searchHighlighted: matchIdSet.has(n.id) },
+    }));
+
+  const filteredEdges = allEdges.filter(
+    (e) => visibleIds.has(String(e.source)) && visibleIds.has(String(e.target))
+  );
+
+  return { nodes: filteredNodes, edges: filteredEdges, matchIds };
+}
+
 // Inner component that uses ReactFlow hooks
 function TopologyContent({ clusterId }: { clusterId: number }) {
   const { data: snapshot, isLoading, refetch } = useTopology(clusterId);
@@ -97,6 +147,11 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [matchingNodes, setMatchingNodes] = useState<string[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const [filterMode, setFilterMode] = useState<'highlight' | 'filter'>('highlight');
+  const [preFilterSnapshot, setPreFilterSnapshot] = useState<{
+    nodes: any[];
+    edges: any[];
+  } | null>(null);
 
   // Pagination state
   const [topicOffset, setTopicOffset] = useState(TOPICS_PER_PAGE);
@@ -141,16 +196,34 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
     return { topics, schemas, producers, consumers, streams, connectors, acls };
   }, [nodes]);
 
+  // Total counts from pre-filter snapshot (for "X / Y" display during filtering)
+  const totalEntityCounts = useMemo(() => {
+    if (!preFilterSnapshot) return null;
+    const sns = preFilterSnapshot.nodes;
+    return {
+      topics: sns.filter(n => n.data?.type === 'topic').length,
+      schemas: sns.filter(n => n.data?.type === 'schema').length,
+      producers: sns.filter(n => n.data?.type === 'producer' || n.id?.startsWith('jmx:')).length,
+      consumers: sns.filter(n => n.data?.type === 'consumer' || n.id?.startsWith('group:')).length,
+      streams: sns.filter(n => n.data?.type === 'streams').length,
+      connectors: sns.filter(n => n.data?.type === 'connector' || n.id?.startsWith('connect:')).length,
+      acls: sns.filter(n => n.data?.type === 'acl' || n.id?.startsWith('acl:topic:')).length,
+    };
+  }, [preFilterSnapshot]);
+
   // Transform snapshot data into ReactFlow elements (initial page)
   useEffect(() => {
     const data = snapshot?.data;
     if (!data || typeof data !== "object") return;
 
-    // Detect snapshot change (refresh): reset pagination
+    // Detect snapshot change (refresh): reset pagination and clear filter
     const sid = (snapshot as any)?.id ?? null;
     if (initialSnapshotIdRef.current !== null && initialSnapshotIdRef.current !== sid) {
-      // Snapshot was rebuilt — reset pagination
+      // Snapshot was rebuilt — reset pagination and filter
       setTopicOffset(TOPICS_PER_PAGE);
+      setPreFilterSnapshot(null);
+      setSearchQuery("");
+      setMatchingNodes([]);
     }
     initialSnapshotIdRef.current = sid;
 
@@ -301,6 +374,14 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
           markerEnd: { type: MarkerType.ArrowClosed },
           style: isStreams ? undefined : { strokeWidth: 2, ...(e.style || {}) },
           animated: !isStreams && e.animated !== false,
+        });
+      }
+
+      // Also merge into pre-filter snapshot if filter is active
+      if (preFilterSnapshot) {
+        setPreFilterSnapshot({
+          nodes: [...preFilterSnapshot.nodes, ...addedNodes],
+          edges: [...preFilterSnapshot.edges, ...addedEdges],
         });
       }
 
@@ -622,6 +703,148 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
       searchDebounceRef.current = null;
     }
 
+    // --- FILTER MODE ---
+    if (filterMode === 'filter') {
+      if (!query.trim()) {
+        // Empty query in filter mode: restore full view
+        if (preFilterSnapshot) {
+          const restored = preFilterSnapshot.nodes.map((n) => ({
+            ...n,
+            data: { ...n.data, searchHighlighted: false },
+          }));
+          const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+            restored,
+            preFilterSnapshot.edges
+          );
+          setNodes(layoutedNodes);
+          setEdges(layoutedEdges);
+          setPreFilterSnapshot(null);
+          setTimeout(() => reactFlowInstance.fitView({ padding: 0.1, duration: 500 }), 100);
+        }
+        setMatchingNodes([]);
+        setIsSearchingServer(false);
+        return;
+      }
+
+      // Save snapshot on first filter keystroke
+      const snapshot = preFilterSnapshot ?? {
+        nodes: [...nodesRef.current],
+        edges: [...edgesRef.current],
+      };
+      if (!preFilterSnapshot) {
+        setPreFilterSnapshot(snapshot);
+      }
+
+      // Run client-side filter
+      const { nodes: filteredNodes, edges: filteredEdges, matchIds } =
+        computeFilteredGraph(snapshot.nodes, snapshot.edges, query);
+
+      setMatchingNodes(matchIds);
+
+      if (filteredNodes.length > 0) {
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+          filteredNodes,
+          filteredEdges
+        );
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+        setTimeout(() => reactFlowInstance.fitView({ padding: 0.2, duration: 500 }), 100);
+      } else {
+        setNodes([]);
+        setEdges([]);
+      }
+
+      // Server search for unloaded topics in filter mode
+      if (topicMeta?.hasMore && query.trim().length >= 2) {
+        setIsSearchingServer(true);
+        const enableProduce = cluster?.enableKafkaEventProduceFromUi ?? false;
+
+        searchDebounceRef.current = setTimeout(async () => {
+          try {
+            const result = await searchTopologyOnServer(clusterId, query.trim());
+            const serverNodes: any[] = result.nodes || [];
+            const serverEdges: any[] = result.edges || [];
+            if (serverNodes.length === 0) { setIsSearchingServer(false); return; }
+
+            const connectorTopics = new Set<string>();
+            for (const e of serverEdges) {
+              const src = String(e.source ?? "");
+              const tgt = String(e.target ?? "");
+              if (src.startsWith("connect:") && tgt.startsWith("topic:")) connectorTopics.add(tgt);
+              if (tgt.startsWith("connect:") && src.startsWith("topic:")) connectorTopics.add(src);
+            }
+
+            // Merge server results into snapshot
+            const currentSnapshot = preFilterSnapshot ?? snapshot;
+            const existingNodeIds = new Set(currentSnapshot.nodes.map((n: any) => n.id));
+            const existingEdgeIds = new Set(currentSnapshot.edges.map((e: any) => String(e.id)));
+
+            const addedNodes = serverNodes
+              .filter((n: any) => !existingNodeIds.has(n.id))
+              .map((n: any) => ({
+                ...n,
+                type: "kafkaNode",
+                data: {
+                  ...n.data,
+                  type: n.type,
+                  highlighted: false,
+                  searchHighlighted: false,
+                  ...(n.type === "topic" && {
+                    enableProduceFromUi: enableProduce,
+                    hasConnector: connectorTopics.has(String(n.id)),
+                  }),
+                },
+                position: { x: 0, y: 0 },
+              }));
+
+            const addedEdges = serverEdges
+              .filter((e: any) => !existingEdgeIds.has(String(e.id)))
+              .map((e: any) => {
+                const isStreams = e.type === "streams" || String(e.id).startsWith("streams:");
+                return {
+                  id: String(e.id),
+                  source: String(e.source),
+                  target: String(e.target),
+                  type: isStreams ? "streams" : "default",
+                  ...(e.label != null && { label: String(e.label) }),
+                  markerEnd: { type: MarkerType.ArrowClosed },
+                  style: isStreams ? undefined : { strokeWidth: 2, ...(e.style || {}) },
+                  animated: !isStreams && e.animated !== false,
+                };
+              });
+
+            const updatedSnapshot = {
+              nodes: [...currentSnapshot.nodes, ...addedNodes],
+              edges: [...currentSnapshot.edges, ...addedEdges],
+            };
+            setPreFilterSnapshot(updatedSnapshot);
+
+            // Re-run filter on updated snapshot
+            const { nodes: reFilteredNodes, edges: reFilteredEdges, matchIds: newMatchIds } =
+              computeFilteredGraph(updatedSnapshot.nodes, updatedSnapshot.edges, query);
+
+            setMatchingNodes(newMatchIds);
+
+            if (reFilteredNodes.length > 0) {
+              const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+                reFilteredNodes,
+                reFilteredEdges
+              );
+              setNodes(layoutedNodes);
+              setEdges(layoutedEdges);
+              setTimeout(() => reactFlowInstance.fitView({ padding: 0.2, duration: 500 }), 100);
+            }
+          } catch {
+            // Server search failed silently
+          } finally {
+            setIsSearchingServer(false);
+          }
+        }, 350);
+      }
+      return;
+    }
+
+    // --- HIGHLIGHT MODE (existing behavior) ---
     if (!query.trim()) {
       setMatchingNodes([]);
       setIsSearchingServer(false);
@@ -778,7 +1001,7 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
         }
       }, 350);
     }
-  }, [nodes, setNodes, setEdges, reactFlowInstance, topicMeta, clusterId, cluster]);
+  }, [nodes, setNodes, setEdges, reactFlowInstance, topicMeta, clusterId, cluster, filterMode, preFilterSnapshot]);
 
   // Navigate to next match
   const nextMatch = useCallback(() => {
@@ -806,13 +1029,80 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
     setMatchingNodes([]);
     setCurrentMatchIndex(0);
     setIsSearchingServer(false);
-    setNodes((nds) =>
-      nds.map((node) => ({
-        ...node,
-        data: { ...node.data, searchHighlighted: false },
-      }))
-    );
-  }, [setNodes]);
+
+    if (filterMode === 'filter' && preFilterSnapshot) {
+      const restored = preFilterSnapshot.nodes.map((n) => ({
+        ...n,
+        data: { ...n.data, searchHighlighted: false },
+      }));
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+        restored,
+        preFilterSnapshot.edges
+      );
+      setNodes(layoutedNodes);
+      setEdges(layoutedEdges);
+      setPreFilterSnapshot(null);
+      setTimeout(() => reactFlowInstance.fitView({ padding: 0.1, duration: 500 }), 100);
+    } else {
+      setNodes((nds) =>
+        nds.map((node) => ({
+          ...node,
+          data: { ...node.data, searchHighlighted: false },
+        }))
+      );
+    }
+  }, [setNodes, setEdges, filterMode, preFilterSnapshot, reactFlowInstance]);
+
+  // Handle mode toggle mid-search
+  const handleModeToggle = useCallback(() => {
+    const newMode = filterMode === 'highlight' ? 'filter' : 'highlight';
+    setFilterMode(newMode);
+
+    if (!searchQuery.trim()) {
+      // No active query — just toggle, no-op
+      return;
+    }
+
+    if (newMode === 'filter') {
+      // Switching to filter mode with an active query: save snapshot and apply filter
+      const snap = { nodes: [...nodesRef.current], edges: [...edgesRef.current] };
+      setPreFilterSnapshot(snap);
+      const { nodes: filteredNodes, edges: filteredEdges, matchIds } =
+        computeFilteredGraph(snap.nodes, snap.edges, searchQuery);
+      setMatchingNodes(matchIds);
+      if (filteredNodes.length > 0) {
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(filteredNodes, filteredEdges);
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+        setTimeout(() => reactFlowInstance.fitView({ padding: 0.2, duration: 500 }), 100);
+      } else {
+        setNodes([]);
+        setEdges([]);
+      }
+    } else {
+      // Switching to highlight mode: restore snapshot and apply highlights
+      if (preFilterSnapshot) {
+        const searchLower = searchQuery.toLowerCase();
+        const restoredNodes = preFilterSnapshot.nodes.map((n) => {
+          const label = n.data?.label?.toLowerCase() || "";
+          const type = n.data?.type?.toLowerCase() || "";
+          const id = n.id.toLowerCase();
+          const isMatch = label.includes(searchLower) || type.includes(searchLower) || id.includes(searchLower);
+          return { ...n, data: { ...n.data, searchHighlighted: isMatch } };
+        });
+        const matchIds = restoredNodes.filter((n) => n.data.searchHighlighted).map((n) => n.id);
+        setMatchingNodes(matchIds);
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+          restoredNodes,
+          preFilterSnapshot.edges
+        );
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+        setPreFilterSnapshot(null);
+        setTimeout(() => reactFlowInstance.fitView({ padding: 0.1, duration: 500 }), 100);
+      }
+    }
+  }, [filterMode, searchQuery, preFilterSnapshot, setNodes, setEdges, reactFlowInstance]);
 
   if (isLoading) {
     return (
@@ -943,7 +1233,18 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
             </PopoverContent>
           </Popover>
           
-          {/* Search Input */}
+          {/* Filter Mode Toggle + Search Input */}
+          <button
+            onClick={handleModeToggle}
+            className={`p-2 rounded-md border transition-colors ${
+              filterMode === 'filter'
+                ? 'bg-blue-100 dark:bg-blue-950/50 border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                : 'bg-background/50 border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+            title={filterMode === 'filter' ? 'Filter mode: hides unmatched nodes' : 'Highlight mode: highlights matched nodes'}
+          >
+            <Filter className="w-4 h-4" />
+          </button>
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -995,13 +1296,17 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                   <span className="flex items-center gap-1">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     {matchingNodes.length > 0
-                      ? `${currentMatchIndex + 1} of ${matchingNodes.length}+ — searching all topics…`
+                      ? filterMode === 'filter'
+                        ? `Showing ${nodes.length} nodes (${matchingNodes.length} matched) — searching…`
+                        : `${currentMatchIndex + 1} of ${matchingNodes.length}+ — searching all topics…`
                       : "Searching all topics…"}
                   </span>
                 ) : matchingNodes.length > 0 ? (
-                  <>
-                    {currentMatchIndex + 1} of {matchingNodes.length} match{matchingNodes.length !== 1 ? 'es' : ''}
-                  </>
+                  filterMode === 'filter' ? (
+                    <>Showing {nodes.length} of {preFilterSnapshot ? preFilterSnapshot.nodes.length : nodes.length} nodes ({matchingNodes.length} matched)</>
+                  ) : (
+                    <>{currentMatchIndex + 1} of {matchingNodes.length} match{matchingNodes.length !== 1 ? 'es' : ''}</>
+                  )
                 ) : (
                   'No matches'
                 )}
@@ -1090,52 +1395,66 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
                   <div className="w-2 h-2 rounded-full bg-[hsl(var(--node-topic))]" />
                   <span className="text-muted-foreground">Topics</span>
                 </div>
-                <span className="font-bold text-foreground">{entityCounts.topics}</span>
+                <span className="font-bold text-foreground">
+                  {entityCounts.topics}{totalEntityCounts ? ` / ${totalEntityCounts.topics}` : ''}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <FileJson className="w-3 h-3 text-[hsl(var(--node-schema))]" />
                   <span className="text-muted-foreground">Schemas</span>
                 </div>
-                <span className="font-bold text-foreground">{entityCounts.schemas}</span>
+                <span className="font-bold text-foreground">
+                  {entityCounts.schemas}{totalEntityCounts ? ` / ${totalEntityCounts.schemas}` : ''}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <Box className="w-3 h-3 text-[hsl(var(--node-producer))]" />
                   <span className="text-muted-foreground">Producers</span>
                 </div>
-                <span className="font-bold text-foreground">{entityCounts.producers}</span>
+                <span className="font-bold text-foreground">
+                  {entityCounts.producers}{totalEntityCounts ? ` / ${totalEntityCounts.producers}` : ''}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <Activity className="w-3 h-3 text-[hsl(var(--node-consumer))]" />
                   <span className="text-muted-foreground">Consumer Groups</span>
                 </div>
-                <span className="font-bold text-foreground">{entityCounts.consumers}</span>
+                <span className="font-bold text-foreground">
+                  {entityCounts.consumers}{totalEntityCounts ? ` / ${totalEntityCounts.consumers}` : ''}
+                </span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <Shield className="w-3 h-3 text-[hsl(var(--node-acl))]" />
                   <span className="text-muted-foreground">ACLs</span>
                 </div>
-                <span className="font-bold text-foreground">{entityCounts.acls}</span>
+                <span className="font-bold text-foreground">
+                  {entityCounts.acls}{totalEntityCounts ? ` / ${totalEntityCounts.acls}` : ''}
+                </span>
               </div>
-              {entityCounts.streams > 0 && (
+              {(entityCounts.streams > 0 || (totalEntityCounts && totalEntityCounts.streams > 0)) && (
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <GitBranch className="w-3 h-3 text-[hsl(var(--node-streams))]" />
                     <span className="text-muted-foreground">Streams Apps</span>
                   </div>
-                  <span className="font-bold text-foreground">{entityCounts.streams}</span>
+                  <span className="font-bold text-foreground">
+                    {entityCounts.streams}{totalEntityCounts ? ` / ${totalEntityCounts.streams}` : ''}
+                  </span>
                 </div>
               )}
-              {entityCounts.connectors > 0 && (
+              {(entityCounts.connectors > 0 || (totalEntityCounts && totalEntityCounts.connectors > 0)) && (
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <ArrowRightLeft className="w-3 h-3 text-[hsl(var(--node-connector))]" />
                     <span className="text-muted-foreground">Connectors</span>
                   </div>
-                  <span className="font-bold text-foreground">{entityCounts.connectors}</span>
+                  <span className="font-bold text-foreground">
+                    {entityCounts.connectors}{totalEntityCounts ? ` / ${totalEntityCounts.connectors}` : ''}
+                  </span>
                 </div>
               )}
             </div>
