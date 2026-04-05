@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import React from "react";
 import Topology from "./Topology";
+
 import {
   useTopology,
   useRefreshTopology,
@@ -54,8 +54,8 @@ vi.mock("@/components/AiChatPanel", () => ({
 
 // Mock ReactFlow — renders nodes as divs to inspect graph content.
 // useNodesState/useEdgesState use real React.useState so state updates trigger re-renders.
-vi.mock("reactflow", () => {
-  const React = require("react");
+vi.mock("reactflow", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
   const ReactFlow = ({ nodes, edges, children }: any) => (
     <div data-testid="reactflow">
       <div data-testid="rf-nodes">
