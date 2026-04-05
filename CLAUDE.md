@@ -90,3 +90,12 @@ make ci    # runs: test → typecheck → test-integration → client build
 - **Server env files**: `server/.env.dev` and `server/.env` are loaded automatically by `main.py`.
 - **Client path alias**: Use `@/` to import from `client/src/` (configured in `vite.config.ts` and `tsconfig.json`).
 - **Testing**: Server uses pytest; client uses vitest with jsdom + React Testing Library.
+
+## Development Guidelines
+
+### State management in async contexts
+When state is read inside `useCallback`, `useEffect`, or async callbacks (debounced functions, promises, timeouts), verify it won't be stale at execution time. Either add it to dependency arrays or use a ref that syncs on every render. When a user action changes state that in-flight async work depends on, cancel pending work first (clear timeouts, abort fetches, reset flags) before applying the new state.
+
+### Testing practices
+- Tests must always import and exercise the production implementation. Never copy production logic into test files — if something isn't exported, extract it to a shared module under `client/src/lib/` and import it in both production code and tests.
+- Place unit tests adjacent to the module they test (e.g., `filterGraph.ts` → `filterGraph.test.ts`). Page/component integration tests go alongside the component (e.g., `Topology.test.tsx`).

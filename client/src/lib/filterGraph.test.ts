@@ -101,4 +101,9 @@ describe("computeFilteredGraph", () => {
     const result = computeFilteredGraph(nodes, edges, "ORDERS");
     expect(result.matchIds).toEqual(["topic:orders"]);
   });
+
+  it("trims leading/trailing spaces before matching", () => {
+    const result = computeFilteredGraph(nodes, edges, "  orders  ");
+    expect(result.matchIds).toEqual(["topic:orders"]);
+  });
 });

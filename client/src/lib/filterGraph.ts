@@ -7,7 +7,7 @@ export function computeFilteredGraph(
   if (!query.trim()) {
     return { nodes: allNodes, edges: allEdges, matchIds: [] };
   }
-  const searchLower = query.toLowerCase();
+  const searchLower = query.trim().toLowerCase();
   const matchIds: string[] = [];
   const matchIdSet = new Set<string>();
 
