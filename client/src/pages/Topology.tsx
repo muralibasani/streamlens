@@ -18,6 +18,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, RefreshCw, LayoutTemplate, ArrowLeft, Info, Sparkles, Shield, Zap, Search, X, ChevronDown, ChevronUp, CheckCircle2, XCircle, Server, User, Activity, Box, GitBranch, FileJson, AlertTriangle, ArrowRightLeft, MoreHorizontal, Filter } from "lucide-react";
+import { computeFilteredGraph } from "@/lib/filterGraph";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/hooks/use-theme";
 import { Link } from "wouter";
@@ -78,56 +79,6 @@ const edgeTypes = {
   streams: StreamsEdge,
 };
 
-// Compute a filtered subgraph: matched nodes + one-hop neighbors + connecting edges
-function computeFilteredGraph(
-  allNodes: any[],
-  allEdges: any[],
-  query: string
-): { nodes: any[]; edges: any[]; matchIds: string[] } {
-  if (!query.trim()) {
-    return { nodes: allNodes, edges: allEdges, matchIds: [] };
-  }
-  const searchLower = query.toLowerCase();
-  const matchIds: string[] = [];
-  const matchIdSet = new Set<string>();
-
-  for (const node of allNodes) {
-    const label = node.data?.label?.toLowerCase() || "";
-    const type = node.data?.type?.toLowerCase() || "";
-    const id = node.id.toLowerCase();
-    if (label.includes(searchLower) || type.includes(searchLower) || id.includes(searchLower)) {
-      matchIds.push(node.id);
-      matchIdSet.add(node.id);
-    }
-  }
-
-  if (matchIds.length === 0) {
-    return { nodes: [], edges: [], matchIds: [] };
-  }
-
-  // Find one-hop neighbors via edges
-  const visibleIds = new Set(matchIdSet);
-  for (const edge of allEdges) {
-    const src = String(edge.source);
-    const tgt = String(edge.target);
-    if (matchIdSet.has(src)) visibleIds.add(tgt);
-    if (matchIdSet.has(tgt)) visibleIds.add(src);
-  }
-
-  const filteredNodes = allNodes
-    .filter((n) => visibleIds.has(n.id))
-    .map((n) => ({
-      ...n,
-      data: { ...n.data, searchHighlighted: matchIdSet.has(n.id) },
-    }));
-
-  const filteredEdges = allEdges.filter(
-    (e) => visibleIds.has(String(e.source)) && visibleIds.has(String(e.target))
-  );
-
-  return { nodes: filteredNodes, edges: filteredEdges, matchIds };
-}
-
 // Inner component that uses ReactFlow hooks
 function TopologyContent({ clusterId }: { clusterId: number }) {
   const { data: snapshot, isLoading, refetch } = useTopology(clusterId);
@@ -168,6 +119,9 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
   nodesRef.current = nodes;
   const edgesRef = useRef(edges);
   edgesRef.current = edges;
+  // Ref for pre-filter snapshot — used by handleLoadMore so it always reads fresh state
+  const preFilterSnapshotRef = useRef(preFilterSnapshot);
+  preFilterSnapshotRef.current = preFilterSnapshot;
 
   // Redirect to homepage if cluster is offline
   useEffect(() => {
@@ -378,10 +332,11 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
       }
 
       // Also merge into pre-filter snapshot if filter is active
-      if (preFilterSnapshot) {
+      const currentSnapshot = preFilterSnapshotRef.current;
+      if (currentSnapshot) {
         setPreFilterSnapshot({
-          nodes: [...preFilterSnapshot.nodes, ...addedNodes],
-          edges: [...preFilterSnapshot.edges, ...addedEdges],
+          nodes: [...currentSnapshot.nodes, ...addedNodes],
+          edges: [...currentSnapshot.edges, ...addedEdges],
         });
       }
 
@@ -1055,6 +1010,13 @@ function TopologyContent({ clusterId }: { clusterId: number }) {
 
   // Handle mode toggle mid-search
   const handleModeToggle = useCallback(() => {
+    // Cancel any pending debounced server search to prevent stale async updates
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    setIsSearchingServer(false);
+
     const newMode = filterMode === 'highlight' ? 'filter' : 'highlight';
     setFilterMode(newMode);
 

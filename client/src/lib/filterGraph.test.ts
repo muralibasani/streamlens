@@ -1,54 +1,5 @@
 import { describe, it, expect } from "vitest";
-
-// Re-implement computeFilteredGraph here since it's not exported.
-// This mirrors the function in Topology.tsx exactly.
-function computeFilteredGraph(
-  allNodes: any[],
-  allEdges: any[],
-  query: string
-): { nodes: any[]; edges: any[]; matchIds: string[] } {
-  if (!query.trim()) {
-    return { nodes: allNodes, edges: allEdges, matchIds: [] };
-  }
-  const searchLower = query.toLowerCase();
-  const matchIds: string[] = [];
-  const matchIdSet = new Set<string>();
-
-  for (const node of allNodes) {
-    const label = node.data?.label?.toLowerCase() || "";
-    const type = node.data?.type?.toLowerCase() || "";
-    const id = node.id.toLowerCase();
-    if (label.includes(searchLower) || type.includes(searchLower) || id.includes(searchLower)) {
-      matchIds.push(node.id);
-      matchIdSet.add(node.id);
-    }
-  }
-
-  if (matchIds.length === 0) {
-    return { nodes: [], edges: [], matchIds: [] };
-  }
-
-  const visibleIds = new Set(matchIdSet);
-  for (const edge of allEdges) {
-    const src = String(edge.source);
-    const tgt = String(edge.target);
-    if (matchIdSet.has(src)) visibleIds.add(tgt);
-    if (matchIdSet.has(tgt)) visibleIds.add(src);
-  }
-
-  const filteredNodes = allNodes
-    .filter((n) => visibleIds.has(n.id))
-    .map((n) => ({
-      ...n,
-      data: { ...n.data, searchHighlighted: matchIdSet.has(n.id) },
-    }));
-
-  const filteredEdges = allEdges.filter(
-    (e) => visibleIds.has(String(e.source)) && visibleIds.has(String(e.target))
-  );
-
-  return { nodes: filteredNodes, edges: filteredEdges, matchIds };
-}
+import { computeFilteredGraph } from "./filterGraph";
 
 const makeNode = (id: string, label: string, type: string) => ({
   id,
@@ -78,11 +29,7 @@ describe("computeFilteredGraph", () => {
   it("returns matched node + connected neighbors + edges between visible nodes", () => {
     const result = computeFilteredGraph(nodes, edges, "orders");
 
-    // "orders" matches topic:orders (label "orders" contains "orders")
-    // group:order-service label is "order-service" which does NOT contain "orders"
-    // but its id "group:order-service" contains "orders" → it matches too? No — "order-service" doesn't contain "orders"
-    // Actually id is "group:order-service" which does not contain "orders" either
-    // So only topic:orders matches directly
+    // Only topic:orders matches directly (label "orders" contains "orders")
     expect(result.matchIds).toEqual(["topic:orders"]);
 
     const visibleIds = result.nodes.map((n) => n.id).sort();
@@ -135,8 +82,6 @@ describe("computeFilteredGraph", () => {
     const result = computeFilteredGraph(nodes, edges, "producer");
     expect(result.matchIds).toEqual(["producer:payment-svc"]);
     // producer connects to topic:payments (neighbor via e2)
-    // topic:payments also connects to group:order-service but that's 2 hops away
-    // However, topic:payments is a neighbor, and its edges are included if both endpoints are visible
     expect(result.nodes.map((n) => n.id).sort()).toEqual([
       "producer:payment-svc",
       "topic:payments",
